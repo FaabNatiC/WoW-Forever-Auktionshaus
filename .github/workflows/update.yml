@@ -1,0 +1,43 @@
+name: Preise aktualisieren
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preise
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bisherige Daten holen
+        run: |
+          mkdir -p out
+          if git ls-remote --exit-code --heads origin data > /dev/null; then
+            git fetch --depth 1 origin data
+            git archive FETCH_HEAD | tar -x -C out
+          fi
+
+      - name: Preise abrufen
+        run: node update.mjs out
+
+      - name: Daten-Branch veroeffentlichen
+        run: |
+          cd out
+          git init -q -b data
+          git add -A
+          git -c user.name="preis-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Preise $(date -u +'%d.%m.%Y %H:%M') UTC"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
