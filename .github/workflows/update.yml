@@ -32,7 +32,10 @@ jobs:
           fi
 
       - name: Preise abrufen
-        run: node update.mjs out
+        env:
+          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+        run: node update.js out
 
       - name: Daten-Branch veroeffentlichen
         run: |
