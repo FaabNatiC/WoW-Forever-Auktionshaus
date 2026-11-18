@@ -228,11 +228,11 @@
 
   var REPO = 'FaabNatiC/WoW-Forever-Auktionshaus';
   var DATA = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? './out/' : 'https://raw.githubusercontent.com/' + REPO + '/data/';
-  var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {};
+  var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {}, BZ = {}, SOURCE = '';
   var PROFS = ['Alle','Erste Hilfe','Schneiderei','Kochkunst','Bergbau'];
   var FNAME = { A:'Allianz', H:'Horde', N:'Blackwater' };
   var STAR = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="__F__" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>';
-  var CREDIT = '<p class="credit">AH-Daten: <a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Blizzard-API) · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Item-Namen/Icons: <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Icon-Grafiken © Blizzard</p>';
+  var CREDIT = '<p class="credit">AH-Daten: <a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Blizzard-API) · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard</p>';
 
   // ---------- Zustand ----------
   var DEFAULTS = { tab:'rezepte', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto',
@@ -258,10 +258,17 @@
     return { mats:mats, missing:missing, cost:cost, unit:unit, fee:f, net:net, profit:profit, margin: cost > 0 ? profit/cost : 0 };
   }
   function dev(id, f){ var r = row(id, f); if (!r || !r[2]) return null; return r[1] / r[2] - 1; }
-  function name(id){ return NAMES[id] || (ITEMS[id] && ITEMS[id][0]) || ('Forever-Item #'+id); }
+  function name(id){ return (BZ[id] && BZ[id][0]) || NAMES[id] || (ITEMS[id] && ITEMS[id][0]) || ('Forever-Item #'+id); }
   function enName(id){ return (ITEMS[id] && ITEMS[id][0]) || ''; }
-  function qual(id){ return ITEMS[id] ? ITEMS[id][2] : 1; }
-  function catOf(id){ return ITEMS[id] ? ITEMS[id][1] : 15; }
+  function qual(id){ return BZ[id] ? BZ[id][1] : ITEMS[id] ? ITEMS[id][2] : 1; }
+  var BZCAT = { '7:5':0, '7:9':1, '7:7':2, '7:6':3, '7:8':4, '7:10':5, '7:12':5 };
+  function catOf(id){
+    if (ITEMS[id] && ITEMS[id][1] !== 15) return ITEMS[id][1];
+    var b = BZ[id]; if (!b) return 15;
+    var c = b[3], sc = b[4], k = c+':'+sc;
+    if (k in BZCAT) return BZCAT[k];
+    return c === 7 ? 6 : c === 0 ? (sc === 1 || sc === 2 || sc === 3 ? 7 : sc === 5 || sc === 7 ? 8 : 9) : c === 9 ? 10 : c === 2 ? 11 : c === 4 ? 12 : c === 1 ? 13 : 14;
+  }
   function liquid(id){ var r = row(id); return r && r[4] >= 5; }
   var ICON_BASE = 'https://render.worldofwarcraft.com/eu/icons/56/';
   var iconsOk = true;
@@ -286,7 +293,8 @@
   };
   function iconHtml(id, size){
     var c = catOf(id), q = qual(id), ic = ITEMS[id] ? ITEMS[id][3] : -1, px = size === 'lg' ? 28 : size === 'sm' ? 16 : 20;
-    var img = (iconsOk && ic >= 0) ? '<img class="icimg" src="'+ICON_BASE+ICONS[ic]+'.jpg" alt="" loading="lazy" decoding="async">' : '';
+    var url = (BZ[id] && BZ[id][2]) || (ic >= 0 ? ICON_BASE+ICONS[ic]+'.jpg' : '');
+    var img = (iconsOk && url) ? '<img class="icimg" src="'+url+'" alt="" loading="lazy" decoding="async">' : '';
     return '<span class="ic '+(size||'')+' qb'+q+'" aria-hidden="true"><svg width="'+px+'" height="'+px+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+GLYPH[c]+'</svg>'+img+'</span>';
   }
   function recipe(id){ return RECIPES.filter(function(r){ return r.out === id; })[0]; }
@@ -473,6 +481,8 @@
       + '<h2 class="sec">Datenstand</h2><div class="box">'
       + '<div class="line"><span>AH-Scan '+FNAME[S.faction]+'</span><span class="num">'+(SCANNED[S.faction] ? dt(SCANNED[S.faction]) : '–')+'</span></div>'
       + '<div class="line"><span>Aktualisierung</span><span>stündlich (GitHub Actions)</span></div>'
+      + '<div class="line"><span>Preisquelle</span><span>'+esc(SOURCE || '–')+'</span></div>'
+      + '<div class="line"><span>Deutsche Namen</span><span class="num">'+n(Object.keys(BZ).length)+' Items</span></div>'
       + '<div class="line"><span>Markt</span><span>Normal (PvE) · EU</span></div>'
       + '<div class="line"><span>Rezepte</span><span>Forever-Client 1.60.1.70938</span></div></div>'
       + '<p class="hint">Annahme: Normal = Häuser 111 (Allianz), 114 (Horde), 117 (Blackwater).</p>'
@@ -532,8 +542,8 @@
   }
 
   function itemDetail(id){
-    if (!ITEMS[id] && !NAMES[id]) return '<p class="note">Item nicht gefunden.</p>';
-    var r = row(id), d = dev(id), src = NAMES[id] ? 'Name: eigene Übersetzung'+(enName(id)?' („'+esc(enName(id))+'“)':'') : enName(id) ? 'Name: Classic-Datenbank (englisch)' : 'Name unbekannt – neues Forever-Item';
+    if (!ITEMS[id] && !NAMES[id] && !BZ[id] && !row(id)) return '<p class="note">Item nicht gefunden.</p>';
+    var r = row(id), d = dev(id), src = BZ[id] ? 'Name: Blizzard (Forever, deutsch)'+(enName(id)?' · engl. „'+esc(enName(id))+'“':'') : NAMES[id] ? 'Name: eigene Übersetzung'+(enName(id)?' („'+esc(enName(id))+'“)':'') : enName(id) ? 'Name: Classic-Datenbank (englisch)' : 'Name unbekannt – neues Forever-Item';
     var h = '<div><div class="titlerow">'+iconHtml(id,'lg')+'<div><h1 class="q'+qual(id)+'">'+esc(name(id))+'</h1><p class="sub">'+CATS[catOf(id)]+' · Item-ID '+id+' · '+FNAME[S.faction]+'</p></div></div>'
       + '<p class="hint" style="margin-top:4px">'+src+' · <a href="https://foreverdb.net/item/'+id+'">auf ForeverDB ansehen</a></p></div>';
     if (!r) h += '<p class="note">Im '+FNAME[S.faction]+'-AH gerade nicht angeboten.</p>';
@@ -706,8 +716,9 @@
     fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
   ]).then(function(res){
     CATS = res[0].cats; ICONS = res[0].icons; ITEMS = res[0].items;
-    var L = res[1]; SCANNED = L.scanned || {}; SNAP = { A:L.A || {}, H:L.H || {}, N:L.N || {} };
+    var L = res[1]; SCANNED = L.scanned || {}; SOURCE = L.source || ''; SNAP = { A:L.A || {}, H:L.H || {}, N:L.N || {} };
     route(); if (!lastTab) { render(); lastTab = S.tab; }
+    fetch(DATA+'names.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : {}; }).then(function(N){ BZ = N || {}; if (Object.keys(BZ).length) render(); }).catch(function(){});
   }).catch(function(e){
     $('head').innerHTML = '<h1>Gold-Rechner</h1>';
     $('list').innerHTML = '<div class="empty">Preise konnten nicht geladen werden.<br>Läuft der Job schon (Reiter „Actions“)?<button type="button" class="btn" onclick="location.reload()">Neu laden</button></div>';
@@ -716,7 +727,7 @@
     if (document.visibilityState !== 'visible' || !SCANNED.A) return;
     fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(L){
       if (!L || !L.scanned || L.scanned.A === SCANNED.A) return;
-      SCANNED = L.scanned; SNAP = { A:L.A, H:L.H, N:L.N }; HIST = {}; render(); toast('Neue Preise geladen');
+      SCANNED = L.scanned; SOURCE = L.source || SOURCE; SNAP = { A:L.A, H:L.H, N:L.N }; HIST = {}; render(); toast('Neue Preise geladen');
     }).catch(function(){});
   });
 })();
