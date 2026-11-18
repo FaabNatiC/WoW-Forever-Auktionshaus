@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gold-Rechner · WoW Forever</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gold-Rechner">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#121418">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#121418; --shell:#0C0E11; --card:#1B1E24; --card2:#252932; --line:#2A2E36;
+    --text:#ECEDEF; --muted:#9BA1AC; --soft:#C4C8D0; --nav:#15171C;
+    --gold:#E8B44C; --gold-ink:#1A1408; --gold-soft:#E8C985; --gold-bg:#1D1A12; --gold-line:#4A3C1C;
+    --loss:#F28B8B; --loss-bg:#211517; --loss-line:#5A2E33;
+    --up:#6FD88A; --up-bg:#132018; --up-line:#2F5A3A;
+    --down:#8AB4F8; --down-bg:#121A26; --down-line:#2C3F5E;
+    --note-bg:#1A1710; --note-line:#6B5626;
+    --coin-g:#E8B44C; --coin-s:#C9CED6; --coin-c:#D08A5A;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"]{
+    --bg:#F6F4EF; --shell:#E9E6DF; --card:#FFFFFF; --card2:#EFECE5; --line:#DDD8CE;
+    --text:#1D1F24; --muted:#5E6470; --soft:#3F444E; --nav:#FFFFFF;
+    --gold:#9A6A06; --gold-ink:#FFFFFF; --gold-soft:#7A5508; --gold-bg:#FBF3E2; --gold-line:#E6CF9C;
+    --loss:#B3261E; --loss-bg:#FCEEEE; --loss-line:#EBC0BD;
+    --up:#1E7A3A; --up-bg:#EAF6EE; --up-line:#B9DFC4;
+    --down:#1F5BB8; --down-bg:#EAF1FC; --down-line:#BCD0F1;
+    --note-bg:#FBF3E2; --note-line:#E0C383;
+    --coin-g:#9A6A06; --coin-s:#5F6670; --coin-c:#9C5426;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#F6F4EF; --shell:#E9E6DF; --card:#FFFFFF; --card2:#EFECE5; --line:#DDD8CE;
+      --text:#1D1F24; --muted:#5E6470; --soft:#3F444E; --nav:#FFFFFF;
+      --gold:#9A6A06; --gold-ink:#FFFFFF; --gold-soft:#7A5508; --gold-bg:#FBF3E2; --gold-line:#E6CF9C;
+      --loss:#B3261E; --loss-bg:#FCEEEE; --loss-line:#EBC0BD;
+      --up:#1E7A3A; --up-bg:#EAF6EE; --up-line:#B9DFC4;
+      --down:#1F5BB8; --down-bg:#EAF1FC; --down-line:#BCD0F1;
+      --note-bg:#FBF3E2; --note-line:#E0C383;
+      --coin-g:#9A6A06; --coin-s:#5F6670; --coin-c:#9C5426;
+      color-scheme: light;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--shell);color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  button,input,select{font:inherit;color:inherit}
+  a{color:var(--gold)}
+  .app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
+  .listcol{display:flex;flex-direction:column;min-height:100vh}
+  .sticky{position:sticky;top:0;z-index:10;background:var(--bg);padding:calc(14px + env(safe-area-inset-top)) 20px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+  .toprow{display:flex;justify-content:space-between;align-items:center;gap:12px}
+  h1{margin:0;font-family:'Space Grotesk',Inter,sans-serif;font-size:24px;font-weight:600;letter-spacing:-.01em}
+  h2.sec{margin:8px 0 0;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
+  .fresh{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .stats{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:13px;color:var(--soft);min-height:40px}
+  .stats b{color:var(--text)}
+  .iconbtn{width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--soft);cursor:pointer}
+  .iconbtn:disabled{opacity:.35;cursor:default}
+  .seg{display:flex;gap:4px;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+  .seg button{flex:1;min-height:40px;border:0;border-radius:10px;background:transparent;color:var(--soft);font-weight:600;font-size:14px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink)}
+  .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:none;min-height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line);background:var(--card);color:var(--soft);font-weight:500;font-size:14px;cursor:pointer;white-space:nowrap}
+  .chip[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--gold-ink)}
+  .search{width:100%;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:16px}
+  .search::placeholder{color:var(--muted)}
+  .tools{display:flex;gap:8px;align-items:center}
+  .tools select{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 10px;font-size:14px}
+  .toggle{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:14px;cursor:pointer;white-space:nowrap}
+  .toggle[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+  .listhead{padding:10px 20px 6px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .list{flex:1;padding:0 20px 24px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;align-items:center;gap:10px;min-height:64px;padding:8px 8px 8px 14px;background:var(--card);border:1px solid var(--line);border-radius:14px;text-align:left;cursor:pointer;width:100%}
+  .row.sel{border-color:var(--gold)}
+  .row:focus:not(:focus-visible){outline:none}
+  .rank{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--card2);font-size:13px;font-weight:600;color:var(--soft)}
+  .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{font-size:12px;color:var(--muted)}
+  .right{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .profit{font-size:15px;font-weight:700}
+  .neg{color:var(--loss)}
+  .star{width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:10px}
+  .star[aria-pressed="true"]{color:var(--gold)}
+  .coin{display:inline-flex;align-items:baseline;gap:1px;margin-left:4px}
+  .coin:first-child{margin-left:0}
+  .coin i{font-style:normal;font-size:.8em;font-weight:700}
+  .cg i{color:var(--coin-g)} .cs i{color:var(--coin-s)} .cc i{color:var(--coin-c)}
+  .q0{color:#9D9D9D} .q2{color:#1EFF00} .q3{color:#3A9BFF} .q4{color:#B65DF5} .q5{color:#FF8000}
+  :root[data-theme="light"] .q2{color:#178A17} :root[data-theme="light"] .q3{color:#0B5FC2} :root[data-theme="light"] .q4{color:#7B2FC2} :root[data-theme="light"] .q5{color:#B85C00} :root[data-theme="light"] .q0{color:#777}
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .q2{color:#178A17} :root:not([data-theme="dark"]) .q3{color:#0B5FC2} :root:not([data-theme="dark"]) .q4{color:#7B2FC2} :root:not([data-theme="dark"]) .q5{color:#B85C00} :root:not([data-theme="dark"]) .q0{color:#777} }
+  .ic{position:relative;flex:none;width:36px;height:36px;border-radius:8px;border:2px solid var(--qb,var(--line));background:var(--card2);display:inline-flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted)}
+  .ic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .ic.lg{width:52px;height:52px;border-radius:10px}
+  .ic.sm{width:28px;height:28px;border-radius:6px;border-width:1.5px}
+  .qb0{--qb:#7A7A7A} .qb1{--qb:var(--line)} .qb2{--qb:#1EBE00} .qb3{--qb:#2F86E8} .qb4{--qb:#A44BE8} .qb5{--qb:#FF8000}
+  .titlerow{display:flex;align-items:center;gap:12px}
+  .trend{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .trend.up{color:var(--up)} .trend.down{color:var(--down)} .trend.flat{color:var(--muted)}
+  .warn{color:var(--gold-soft)}
+  .credit{margin:10px 0 0;font-size:11px;color:var(--muted);text-align:center;line-height:1.5}
+  .empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px;display:flex;flex-direction:column;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:14px}
+  .btn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:600;font-size:14px;cursor:pointer}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:var(--gold-ink)}
+  nav.tabs{position:sticky;bottom:0;z-index:10;display:flex;border-top:1px solid var(--line);background:var(--nav);padding:6px 8px calc(8px + env(safe-area-inset-bottom))}
+  nav.tabs button{flex:1;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:none;color:var(--muted);font-size:11px;font-weight:500;cursor:pointer}
+  nav.tabs button[aria-current="page"]{color:var(--gold);font-weight:600}
+  /* Detail */
+  .pane{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;display:none;padding-bottom:env(safe-area-inset-bottom)}
+  .pane.open{display:block;animation:slide .22s ease-out}
+  @keyframes slide{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+  .pane-head{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;align-items:center;gap:8px;padding:calc(12px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+  .pane-head .pos{flex:1;text-align:center;font-size:13px;color:var(--muted)}
+  .pane-body{padding:16px 20px 32px;display:flex;flex-direction:column;gap:12px;max-width:640px;margin:0 auto}
+  .pane-empty{display:none}
+  .hero{display:flex;justify-content:space-between;align-items:flex-end;padding:16px;border-radius:16px;background:var(--gold-bg);border:1px solid var(--gold-line)}
+  .hero.neg{background:var(--loss-bg);border-color:var(--loss-line)}
+  .hero .lbl{font-size:12px;color:var(--muted)}
+  .hero .big{font-family:'Space Grotesk',Inter,sans-serif;font-size:30px;font-weight:700}
+  .hero .marge{font-size:15px;font-weight:600;color:var(--gold-soft)}
+  .hero.neg .marge{color:var(--loss)}
+  .verdict{padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;gap:4px}
+  .verdict b{font-size:15px}
+  .verdict.up{border-color:var(--up-line);background:var(--up-bg)} .verdict.up b{color:var(--up)}
+  .verdict.down{border-color:var(--down-line);background:var(--down-bg)} .verdict.down b{color:var(--down)}
+  .verdict span{font-size:13px;color:var(--soft)}
+  .note{margin:0;padding:8px 12px;border:1px dashed var(--note-line);border-radius:10px;font-size:13px;color:var(--gold-soft);background:var(--note-bg)}
+  .box{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px}
+  .line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px}
+  .line:last-child{border-bottom:0}
+  .line.total{font-weight:600}
+  button.line{width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left;cursor:pointer}
+  .box button.line:last-child{border-bottom:0}
+  .tag{padding:3px 8px;border-radius:6px;background:var(--card2);font-size:11px;font-weight:600;color:var(--soft);white-space:nowrap}
+  .tag.bad{background:var(--loss-bg);color:var(--loss)}
+  .hint{margin:0;font-size:12px;color:var(--muted);line-height:1.45}
+  .stepper{display:flex;align-items:center;gap:6px}
+  .stepper button{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card2);font-size:18px;font-weight:600;cursor:pointer}
+  .stepper input{width:64px;height:44px;text-align:center;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:16px}
+  .quick{display:flex;gap:6px;flex-wrap:wrap}
+  .quick .chip{min-height:36px}
+  .bar{position:relative;height:8px;border-radius:4px;background:var(--card2);margin:4px 0 2px}
+  .bar i{position:absolute;top:-3px;width:3px;height:14px;border-radius:2px}
+  .skill{width:80px;height:40px;text-align:center;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:15px}
+  .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .hidden{display:none !important}
+  textarea.copy{position:absolute;left:-9999px}
+  /* Großer Bildschirm: zweispaltig */
+  @media (min-width:960px){
+    .app{max-width:1280px;display:grid;grid-template-columns:440px 1fr;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+    .listcol{border-right:1px solid var(--line);height:100vh;overflow-y:auto;position:sticky;top:0}
+    .pane{position:sticky;top:0;inset:auto;display:block;height:100vh;z-index:1}
+    .pane.open{animation:none}
+    .pane-empty{display:flex;height:100%;align-items:center;justify-content:center;color:var(--muted);font-size:15px;padding:40px;text-align:center}
+    .pane.open .pane-empty{display:none}
+    .pane:not(.open) .pane-head,.pane:not(.open) .pane-body{display:none}
+    .toast{bottom:24px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="listcol">
+    <div class="sticky" id="head"></div>
+    <div class="listhead" id="listhead"></div>
+    <div class="list" id="list"></div>
+    <nav class="tabs" aria-label="Hauptnavigation">
+      <button type="button" data-tab="rezepte">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Rezepte</button>
+      <button type="button" data-tab="markt">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Auktionshaus</button>
+      <button type="button" data-tab="merkliste">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>Merkliste</button>
+      <button type="button" data-tab="einstellungen">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
+    </nav>
+  </div>
+  <aside class="pane" id="pane" aria-label="Details">
+    <div class="pane-empty">Wähle links ein Rezept oder Item, um die Details zu sehen.</div>
+    <div class="pane-head">
+      <button class="iconbtn" type="button" data-close aria-label="Schließen">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button class="iconbtn" type="button" data-nav="-1" aria-label="Vorheriger Eintrag">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 15l-6-6-6 6"/></svg>
+      </button>
+      <span class="pos" id="pos"></span>
+      <button class="iconbtn" type="button" data-nav="1" aria-label="Nächster Eintrag">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <button class="star iconbtn" type="button" id="paneStar" aria-label="Merken" aria-pressed="false">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>
+      </button>
+    </div>
+    <div class="pane-body" id="detail"></div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var NAMES = {"3357":"Lebenswurz","3372":"Bleiphiole","2692":"Heiße Gewürze","8838":"Sonnengras","3713":"Beruhigende Gewürze","8925":"Kristallphiole","13464":"Goldener Sansam","14047":"Runenstoff","14048":"Runenstoffballen","10620":"Thoriumerz","12359":"Thoriumbarren","13759":"Roher Nachtflossenschnapper","159":"Erfrischendes Quellwasser","13931":"Nachtflossensuppe","14530":"Schwerer Runenstoffverband","14529":"Runenstoffverband","3858":"Mithrilerz","3860":"Mithrilbarren","2772":"Eisenerz","3575":"Eisenbarren","1710":"Großer Heiltrank","3928":"Erstklassiger Heiltrank","13446":"Erheblicher Heiltrank"};
+  // Forever-Rezepte laut ForeverDB (Client-Build 1.60.1.70938, Stand 18.11.2026)
+  var RECIPES = [
+    { out:'1710',  prof:'Erste Hilfe', skill:155, mats:[['3372',1],['2692',3],['3357',1]] },
+    { out:'3928',  prof:'Erste Hilfe', skill:215, mats:[['8925',1],['3713',1],['8838',1]] },
+    { out:'13446', prof:'Erste Hilfe', skill:275, mats:[['8925',1],['3713',3],['13464',1]] },
+    { out:'14529', prof:'Erste Hilfe', skill:260, mats:[['14047',1]] },
+    { out:'14530', prof:'Erste Hilfe', skill:290, mats:[['14047',2]] },
+    { out:'14048', prof:'Schneiderei', skill:210, mats:[['14047',5]] },
+    { out:'13931', prof:'Kochkunst',   skill:250, mats:[['13759',1],['159',1]] },
+    { out:'3575',  prof:'Bergbau',     skill:125, mats:[['2772',1]] },
+    { out:'3860',  prof:'Bergbau',     skill:175, mats:[['3858',1]] },
+    { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
+  ];
+
+  var REPO = 'FaabNatiC/WoW-Forever-Auktionshaus';
+  var DATA = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? './out/' : 'https://raw.githubusercontent.com/' + REPO + '/data/';
+  var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {};
+  var PROFS = ['Alle','Erste Hilfe','Schneiderei','Kochkunst','Bergbau'];
+  var FNAME = { A:'Allianz', H:'Horde', N:'Blackwater' };
+  var STAR = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="__F__" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>';
+  var CREDIT = '<p class="credit">AH-Daten: <a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Blizzard-API) · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Item-Namen/Icons: <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Icon-Grafiken © Blizzard</p>';
+
+  // ---------- Zustand ----------
+  var DEFAULTS = { tab:'rezepte', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto',
+                   basis:'market', feeF:5, feeN:15, skills:{}, fav:[], qty:{} };
+  var S = Object.assign({}, DEFAULTS);
+  try { Object.assign(S, JSON.parse(localStorage.getItem('goldapp-gh') || '{}')); } catch(e){}
+  var Q = { rezepte:'', markt:'', merkliste:'' };
+  function save(){ try { localStorage.setItem('goldapp-gh', JSON.stringify(S)); } catch(e){} }
+  function applyTheme(){ if (S.theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', S.theme); }
+  applyTheme();
+
+  // ---------- Rechnen ----------
+  function row(id, f){ return SNAP[f || S.faction][id] || null; }
+  function price(id, f){ var r = row(id, f); if (!r) return null; return S.basis === 'min' ? r[0] : r[1]; }
+  function fee(){ return S.faction === 'N' ? S.feeN : S.feeF; }
+  function calc(rc){
+    var mats = rc.mats.map(function(m){ var p = price(m[0]); return { id:m[0], qty:m[1], p:p, total: p == null ? null : p * m[1] }; });
+    var missing = mats.some(function(m){ return m.total == null; });
+    var cost = mats.reduce(function(s,m){ return s + (m.total || 0); }, 0);
+    var unit = price(rc.out);
+    if (unit == null) return { mats:mats, missing:true, cost:cost, profit:null, margin:null };
+    var f = Math.round(unit * fee() / 100), net = unit - f, profit = net - cost;
+    return { mats:mats, missing:missing, cost:cost, unit:unit, fee:f, net:net, profit:profit, margin: cost > 0 ? profit/cost : 0 };
+  }
+  function dev(id, f){ var r = row(id, f); if (!r || !r[2]) return null; return r[1] / r[2] - 1; }
+  function name(id){ return NAMES[id] || (ITEMS[id] && ITEMS[id][0]) || ('Forever-Item #'+id); }
+  function enName(id){ return (ITEMS[id] && ITEMS[id][0]) || ''; }
+  function qual(id){ return ITEMS[id] ? ITEMS[id][2] : 1; }
+  function catOf(id){ return ITEMS[id] ? ITEMS[id][1] : 15; }
+  function liquid(id){ var r = row(id); return r && r[4] >= 5; }
+  var ICON_BASE = 'https://render.worldofwarcraft.com/eu/icons/56/';
+  var iconsOk = true;
+  document.addEventListener('error', function(e){ var t = e.target; if (t && t.classList && t.classList.contains('icimg')) { t.remove(); iconsOk = false; } }, true);
+  var GLYPH = {
+    0:'<path d="M5 8c0-2 3-3 7-3s7 1 7 3v8c0 2-3 3-7 3s-7-1-7-3z"/><path d="M5 8c0 2 3 3 7 3s7-1 7-3"/>',
+    1:'<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19l8-8"/>',
+    2:'<path d="M4 15l3-8 7-2 6 5-2 8-9 1z"/><path d="M7 7l4 6 9-3M11 13l-2 6"/>',
+    3:'<path d="M7 4c2 1 8 1 10 0 0 3 2 4 3 6-2 1-2 4-1 6-3 0-4 2-7 4-3-2-4-4-7-4 1-2 1-5-1-6 1-2 3-3 3-6z"/>',
+    4:'<path d="M3 12c3-4 8-6 13-3l5-3v12l-5-3c-5 3-10 1-13-3z"/><circle cx="8" cy="11" r=".8"/>',
+    5:'<path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/>',
+    6:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+    7:'<path d="M10 3h4M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M7 15h10"/>',
+    8:'<path d="M4 12h16a8 8 0 0 1-16 0z"/><path d="M9 8c0-2 2-2 2-4M14 8c0-2 2-2 2-4"/>',
+    9:'<rect x="4" y="9" width="16" height="6" rx="3"/><path d="M12 9v6"/>',
+    10:'<path d="M7 4h10v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2h3z"/><path d="M10 8h4M10 12h4"/>',
+    11:'<path d="M14 4h6v6L9 21l-3-3z"/><path d="M5 15l4 4M3 21l3-3"/>',
+    12:'<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>',
+    13:'<path d="M6 8h12l1 12H5z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+    14:'<rect x="4" y="7" width="16" height="13" rx="2"/><path d="M4 11h16M10 15h4"/>',
+    15:'<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .9-1 1.7V15"/><circle cx="12" cy="18.5" r=".6"/>'
+  };
+  function iconHtml(id, size){
+    var c = catOf(id), q = qual(id), ic = ITEMS[id] ? ITEMS[id][3] : -1, px = size === 'lg' ? 28 : size === 'sm' ? 16 : 20;
+    var img = (iconsOk && ic >= 0) ? '<img class="icimg" src="'+ICON_BASE+ICONS[ic]+'.jpg" alt="" loading="lazy" decoding="async">' : '';
+    return '<span class="ic '+(size||'')+' qb'+q+'" aria-hidden="true"><svg width="'+px+'" height="'+px+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+GLYPH[c]+'</svg>'+img+'</span>';
+  }
+  function recipe(id){ return RECIPES.filter(function(r){ return r.out === id; })[0]; }
+  function skillOk(rc){ var v = S.skills[rc.prof]; return !(v > 0) || rc.skill <= v; }
+  function isFav(k){ return S.fav.indexOf(k) >= 0; }
+  function toggleFav(k){ var i = S.fav.indexOf(k); if (i >= 0) S.fav.splice(i,1); else S.fav.push(k); save(); toast(i >= 0 ? 'Von der Merkliste entfernt' : 'Zur Merkliste hinzugefügt'); }
+
+  // ---------- Formatierung ----------
+  function parts(c){ var a = Math.abs(Math.round(c)); return { g:Math.floor(a/10000), s:Math.floor(a%10000/100), k:a%100 }; }
+  function money(c, signed){
+    if (c == null) return '–';
+    var p = parts(c), out = [];
+    if (p.g) out.push('<span class="coin cg">'+p.g.toLocaleString('de-DE')+'<i>g</i></span>');
+    if (p.s || (p.g && p.k)) out.push('<span class="coin cs">'+(p.g ? String(p.s).padStart(2,'0') : p.s)+'<i>s</i></span>');
+    if (p.k || !out.length) out.push('<span class="coin cc">'+((p.g || p.s) ? String(p.k).padStart(2,'0') : p.k)+'<i>k</i></span>');
+    var sign = c < 0 ? '−' : (signed ? '+' : '');
+    return '<span class="num">'+sign+out.join('')+'</span>';
+  }
+  function moneyTxt(c){ var p = parts(c), o = []; if (p.g) o.push(p.g+'g'); if (p.s || p.g) o.push(p.s+'s'); o.push(p.k+'k'); return (c < 0 ? '−' : '') + o.join(' '); }
+  function pct(x){ return (x < 0 ? '−' : '+') + Math.round(Math.abs(x)*100) + ' %'; }
+  function n(x){ return x.toLocaleString('de-DE'); }
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function trendHtml(d){
+    if (d == null) return '<span class="trend flat">–</span>';
+    var cls = d > 0.05 ? 'up' : d < -0.05 ? 'down' : 'flat';
+    return '<span class="trend '+cls+'">'+(d > 0.05 ? '▲ ' : d < -0.05 ? '▼ ' : '')+pct(d)+'</span>';
+  }
+  function starBtn(k){ var on = isFav(k); return '<button type="button" class="star" data-fav="'+k+'" aria-pressed="'+on+'" aria-label="'+(on ? 'Von Merkliste entfernen' : 'Merken')+'">'+STAR.replace('__F__', on ? 'currentColor' : 'none')+'</button>'; }
+  function fresh(){
+    var t = SCANNED[S.faction]; if (!t) return '<span class="fresh"><span class="dot" style="background:var(--loss)"></span>Keine Daten geladen</span>';
+    var h = (Date.now() - t) / 36e5, col = h < 2 ? 'var(--up)' : h < 12 ? 'var(--gold)' : 'var(--loss)';
+    var ago = h < 1 ? 'vor ' + Math.max(1, Math.round(h*60)) + ' Min.' : h < 48 ? 'vor ' + Math.round(h) + ' Std.' : 'vor ' + Math.round(h/24) + ' Tagen';
+    return '<span class="fresh"><span class="dot" style="background:'+col+'"></span>Stand '+dt(t)+' · '+ago+'</span>';
+  }
+  function dt(t){ var d = new Date(t), p = function(x){ return String(x).padStart(2,'0'); }; return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function dd(t){ var d = new Date(t), p = function(x){ return String(x).padStart(2,'0'); }; return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'; }
+  var $ = function(id){ return document.getElementById(id); };
+  var toastT;
+  function toast(t){ var el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function(){ el.classList.remove('show'); }, 1800); }
+
+  // ---------- Listen ----------
+  var ctx = []; // aktuelle Liste für Vor/Zurück: ['r:1710','i:2772', …]
+  var sel = null;
+
+  function factionSeg(){
+    return '<div class="seg" role="group" aria-label="Fraktion">' + ['A','H','N'].map(function(f){ return '<button type="button" data-faction="'+f+'" aria-pressed="'+(f===S.faction)+'">'+FNAME[f]+'</button>'; }).join('') + '</div>';
+  }
+  function searchBox(ph){ return '<input class="search" id="q" type="search" placeholder="'+ph+'" aria-label="'+ph+'" value="'+esc(Q[S.tab])+'" autocomplete="off">'; }
+  function emptyBox(msg){ return '<div class="empty">'+msg+'<button type="button" class="btn" data-reset>Filter zurücksetzen</button></div>'; }
+
+  function recipeRows(){
+    var q = Q.rezepte.trim().toLowerCase();
+    var all = RECIPES.map(function(r){ return { r:r, c:calc(r) }; });
+    var bySkill = all.filter(function(x){ return skillOk(x.r); });
+    var rows = bySkill.filter(function(x){
+      return (S.prof === 'Alle' || x.r.prof === S.prof)
+        && (!q || name(x.r.out).toLowerCase().indexOf(q) >= 0 || x.r.mats.some(function(m){ return name(m[0]).toLowerCase().indexOf(q) >= 0; }))
+        && (!S.onlyProfit || (x.c.profit != null && x.c.profit > 0));
+    });
+    var key = { profit:function(x){ return x.c.profit == null ? -1e12 : x.c.profit; }, margin:function(x){ return x.c.margin == null ? -1e12 : x.c.margin; },
+                supply:function(x){ var o = row(x.r.out); return o ? o[3] : -1; }, skill:function(x){ return -x.r.skill; } }[S.sort];
+    rows.sort(function(a,b){ var fa = isFav('r:'+a.r.out), fb = isFav('r:'+b.r.out); if (fa !== fb) return fa ? -1 : 1; return key(b) - key(a); });
+    return { rows:rows, total:all.length, hidden:all.length - bySkill.length, profitable: bySkill.filter(function(x){ return x.c.profit > 0; }) };
+  }
+  function recipeRow(x, i){
+    var o = row(x.r.out), right, k = 'r:'+x.r.out;
+    if (x.c.profit == null) right = '<span class="profit neg">kein Preis</span><span class="meta">–</span>';
+    else right = '<span class="profit'+(x.c.profit<0?' neg':'')+'">'+money(x.c.profit,true)+'</span><span class="meta">'+pct(x.c.margin)+' Marge</span>';
+    return '<div class="row'+(sel===k?' sel':'')+'" data-open="'+k+'" role="button" tabindex="0"><span class="rank">'+(i+1)+'</span>'+iconHtml(x.r.out)
+      + '<span class="mid"><span class="name">'+name(x.r.out)+'</span><span class="meta">'+x.r.prof+' '+x.r.skill+' · '+(o ? n(o[3])+' im AH' : 'nicht im AH')
+      + (x.c.missing && x.c.profit != null ? ' · <span class="warn">Mat fehlt</span>' : '')+'</span></span>'
+      + '<span class="right">'+right+'</span>'+starBtn(k)+'</div>';
+  }
+  function itemRow(id){
+    var r = row(id), k = 'i:'+id;
+    return '<div class="row'+(sel===k?' sel':'')+'" data-open="'+k+'" role="button" tabindex="0">'+iconHtml(id)+'<span class="mid"><span class="name q'+qual(id)+'">'+esc(name(id))+'</span>'
+      + '<span class="meta">'+CATS[catOf(id)]+' · '+(r ? n(r[3])+' Stück · '+n(r[4])+' Auktionen' : 'nicht im AH')+'</span></span>'
+      + '<span class="right"><span class="profit" style="font-weight:600">'+(r ? money(price(id)) : '–')+'</span>'+trendHtml(dev(id))+'</span>'+starBtn(k)+'</div>';
+  }
+
+  function renderHead(){
+    var h = '';
+    if (S.tab === 'rezepte') {
+      var d = recipeRows(), best = d.profitable.slice().sort(function(a,b){ return b.c.profit - a.c.profit; })[0];
+      h = '<div class="toprow"><div><h1>Gold-Rechner</h1>'+fresh()+'</div></div>'
+        + '<div class="stats"><span><b>'+d.profitable.length+'</b> von '+(d.total - d.hidden)+' Rezepten profitabel'+(best ? ' · bestes: <b>'+name(best.r.out)+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
+        + factionSeg() + searchBox('Rezept oder Material suchen …')
+        + '<div class="chips" role="group" aria-label="Beruf">'+PROFS.map(function(p){ return '<button type="button" class="chip" data-prof="'+p+'" aria-pressed="'+(p===S.prof)+'">'+p+'</button>'; }).join('')+'</div>'
+        + '<div class="tools"><select id="sort" aria-label="Sortierung">'
+        + [['profit','Nach Gewinn'],['margin','Nach Marge'],['supply','Nach Angebot im AH'],['skill','Nach Fertigkeit']].map(function(o){ return '<option value="'+o[0]+'"'+(S.sort===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
+        + '</select><button type="button" class="toggle" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">nur profitable</button></div>';
+    } else if (S.tab === 'markt') {
+      var ids = Object.keys(SNAP[S.faction]).filter(liquid), up = ids.filter(function(id){ return dev(id) > 0.05; }).length, dn = ids.filter(function(id){ return dev(id) < -0.05; }).length;
+      h = '<div class="toprow"><div><h1>Auktionshaus</h1>'+fresh()+'</div></div>'
+        + '<div class="stats"><span><b class="trend up">▲ '+up+'</b> über · <b class="trend down">▼ '+dn+'</b> unter dem 7-Tage-Schnitt <span class="meta">(Items ab 5 Auktionen)</span></span></div>'
+        + factionSeg() + searchBox('Item suchen (deutsch/englisch oder ID) …')
+        + '<div class="chips" role="group" aria-label="Kategorie">'+[-1].concat(CAT_ORDER).map(function(c){ return '<button type="button" class="chip" data-mcat="'+c+'" aria-pressed="'+(S.mcat===c)+'">'+(c<0?'Alle':CATS[c])+'</button>'; }).join('')+'</div>'
+        + '<div class="seg" role="group" aria-label="Sortierung" id="msort">'
+        + [['volume','Angebot'],['above','Über Ø'],['below','Unter Ø'],['name','A–Z']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.msort===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>';
+    } else if (S.tab === 'merkliste') {
+      h = '<div class="toprow"><div><h1>Merkliste</h1>'+fresh()+'</div></div>'
+        + '<div class="stats"><span><b>'+S.fav.length+'</b> gemerkte Einträge</span></div>' + factionSeg();
+    } else {
+      h = '<div class="toprow"><div><h1>Einstellungen</h1><p class="sub">Normal (PvE) · EU</p></div></div>';
+    }
+    $('head').innerHTML = h;
+  }
+
+  var PAGE = 80, shown = 0;
+  var CAT_ORDER = [0,1,2,3,4,5,6,7,8,9,10,13,11,12,14,15];
+  function marketIds(){
+    var q = Q.markt.trim().toLowerCase();
+    var ids = Object.keys(SNAP[S.faction]).filter(function(id){
+      if (S.mcat >= 0 && catOf(id) !== S.mcat) return false;
+      if ((S.msort === 'above' || S.msort === 'below') && !liquid(id)) return false;
+      return !q || name(id).toLowerCase().indexOf(q) >= 0 || enName(id).toLowerCase().indexOf(q) >= 0 || id === q;
+    });
+    var vol = function(id){ var r = row(id); return r ? r[4] : 0; };
+    ids.sort(function(a,b){
+      var fa = isFav('i:'+a), fb = isFav('i:'+b); if (fa !== fb) return fa ? -1 : 1;
+      if (S.msort === 'name') return name(a).localeCompare(name(b), 'de');
+      if (S.msort === 'volume') return vol(b) - vol(a);
+      var da = dev(a), db = dev(b); if (da == null) return 1; if (db == null) return -1;
+      return S.msort === 'above' ? db - da : da - db;
+    });
+    return ids;
+  }
+  function moreItems(){
+    if (S.tab !== 'markt' || shown >= ctx.length) return;
+    var add = ctx.slice(shown, shown + PAGE).map(function(k){ return itemRow(k.slice(2)); }).join('');
+    shown += PAGE;
+    var m = $('more'); if (!m) return;
+    m.insertAdjacentHTML('beforebegin', add);
+    if (shown >= ctx.length) m.remove();
+  }
+  var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting) moreItems(); }); }, { rootMargin:'600px' }) : null;
+  function watchMore(){ var m = $('more'); if (m && io) { io.disconnect(); io.observe(m); } }
+  function renderList(){
+    var lh = '', html = '';
+    ctx = [];
+    if (S.tab === 'rezepte') {
+      var d = recipeRows();
+      lh = '<span>'+d.rows.length+(d.rows.length===1?' Rezept':' Rezepte')+(d.hidden ? ' · '+d.hidden+' ausgeblendet (Fertigkeit)' : '')+'</span><span>Gewinn pro Craft</span>';
+      html = d.rows.length ? d.rows.map(recipeRow).join('') : emptyBox('Keine Rezepte für diese Auswahl.');
+      ctx = d.rows.map(function(x){ return 'r:'+x.r.out; });
+    } else if (S.tab === 'markt') {
+      var ids = marketIds();
+      lh = '<span>'+n(ids.length)+' Items'+(S.msort==='above'||S.msort==='below' ? ' · ab 5 Auktionen' : '')+'</span><span>Marktpreis · ggü. 7-Tage-Schnitt</span>';
+      shown = PAGE;
+      html = ids.length ? ids.slice(0, shown).map(itemRow).join('') + (ids.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Kein Item gefunden.');
+      ctx = ids.map(function(id){ return 'i:'+id; });
+    } else if (S.tab === 'merkliste') {
+      var rs = S.fav.filter(function(k){ return k[0]==='r' && recipe(k.slice(2)); }), is = S.fav.filter(function(k){ return k[0]==='i' && name(k.slice(2)); });
+      if (!rs.length && !is.length) html = '<div class="empty">Noch nichts gemerkt.<br>Tippe in Rezepten oder im Auktionshaus auf den Stern.</div>';
+      else {
+        if (rs.length) html += '<h2 class="sec">Rezepte</h2>' + rs.map(function(k, i){ var r = recipe(k.slice(2)); return recipeRow({ r:r, c:calc(r) }, i); }).join('');
+        if (is.length) html += '<h2 class="sec">Items</h2>' + is.map(function(k){ return itemRow(k.slice(2)); }).join('');
+      }
+      ctx = rs.concat(is);
+    } else {
+      html = settingsHtml();
+    }
+    $('listhead').innerHTML = lh;
+    $('listhead').classList.toggle('hidden', !lh);
+    $('list').innerHTML = html + (S.tab !== 'einstellungen' ? CREDIT : '');
+    watchMore();
+    document.querySelectorAll('nav.tabs button').forEach(function(b){ b.setAttribute('aria-current', b.dataset.tab === S.tab ? 'page' : 'false'); });
+  }
+
+  function settingsHtml(){
+    var profs = PROFS.slice(1);
+    return '<h2 class="sec">Darstellung</h2><div class="seg" role="group" aria-label="Darstellung" id="themeSeg">'
+      + [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.theme===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
+      + '<h2 class="sec">Meine Fertigkeit</h2><div class="box">' + profs.map(function(p){
+          var v = S.skills[p] || '';
+          return '<label class="line"><span>'+p+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="alle" data-skill="'+p+'" value="'+v+'"></label>';
+        }).join('') + '</div><p class="hint">Leer lassen = alle Rezepte zeigen. Mit Wert werden Rezepte über deiner Stufe ausgeblendet.</p>'
+      + '<h2 class="sec">Berechnung</h2><div class="seg" role="group" aria-label="Preisbasis" id="basisSeg">'
+      + [['market','Marktpreis'],['min','Tiefstpreis']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.basis===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
+      + '<h2 class="sec">AH-Gebühr beim Verkauf</h2><div class="box">'
+      + '<div class="line"><span>Allianz / Horde</span><span class="stepper"><button type="button" aria-label="Gebühr senken" data-fee="feeF,-1">−</button><span class="num" style="width:48px;text-align:center;font-weight:600">'+S.feeF+' %</span><button type="button" aria-label="Gebühr erhöhen" data-fee="feeF,1">+</button></span></div>'
+      + '<div class="line"><span>Blackwater</span><span class="stepper"><button type="button" aria-label="Gebühr senken" data-fee="feeN,-1">−</button><span class="num" style="width:48px;text-align:center;font-weight:600">'+S.feeN+' %</span><button type="button" aria-label="Gebühr erhöhen" data-fee="feeN,1">+</button></span></div>'
+      + '</div><p class="hint">Blizzard hat die Gebühren für Forever nicht veröffentlicht. Vorgabe: Classic-Werte (5 % / 15 %).</p>'
+      + '<h2 class="sec">Datenstand</h2><div class="box">'
+      + '<div class="line"><span>AH-Scan '+FNAME[S.faction]+'</span><span class="num">'+(SCANNED[S.faction] ? dt(SCANNED[S.faction]) : '–')+'</span></div>'
+      + '<div class="line"><span>Aktualisierung</span><span>stündlich (GitHub Actions)</span></div>'
+      + '<div class="line"><span>Markt</span><span>Normal (PvE) · EU</span></div>'
+      + '<div class="line"><span>Rezepte</span><span>Forever-Client 1.60.1.70938</span></div></div>'
+      + '<p class="hint">Annahme: Normal = Häuser 111 (Allianz), 114 (Horde), 117 (Blackwater).</p>'
+      + '<button type="button" class="btn" id="resetBtn" style="align-self:flex-start">Alles auf Standard zurücksetzen</button>' + CREDIT;
+  }
+
+  function render(){ renderHead(); renderList(); if (sel) renderDetail(); }
+
+  // ---------- Details ----------
+  function renderDetail(){
+    if (!sel) return;
+    var type = sel[0], id = sel.slice(2), i = ctx.indexOf(sel);
+    $('pos').textContent = i >= 0 ? (i+1)+' / '+ctx.length : '';
+    document.querySelector('[data-nav="-1"]').disabled = i <= 0;
+    document.querySelector('[data-nav="1"]').disabled = i < 0 || i >= ctx.length - 1;
+    var ps = $('paneStar'), on = isFav(sel);
+    ps.setAttribute('aria-pressed', on); ps.setAttribute('aria-label', on ? 'Von Merkliste entfernen' : 'Merken');
+    ps.innerHTML = STAR.replace('__F__', on ? 'currentColor' : 'none');
+    $('detail').innerHTML = (type === 'r' ? recipeDetail(id) : itemDetail(id)) + CREDIT;
+    if (type === 'i') loadChart(id);
+    document.querySelectorAll('.row').forEach(function(r){ r.classList.toggle('sel', r.dataset.open === sel); });
+  }
+
+  function recipeDetail(id){
+    var rc = recipe(id); if (!rc) return '<p class="note">Rezept nicht gefunden.</p>';
+    var c = calc(rc), o = row(rc.out), qty = Math.max(1, S.qty[id] || 1);
+    var h = '<div class="titlerow">'+iconHtml(rc.out,'lg')+'<div><h1 class="q'+qual(rc.out)+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+' · ab Fertigkeit '+rc.skill+' · Forever-Rezept · '+FNAME[S.faction]+'</p></div></div>';
+    if (!skillOk(rc)) h += '<p class="note">Über deiner eingetragenen Fertigkeit ('+S.skills[rc.prof]+').</p>';
+    if (c.profit == null) return h + '<p class="note">Das Ergebnis-Item wird im '+FNAME[S.faction]+'-AH gerade nicht angeboten – kein Verkaufspreis.</p>';
+    h += '<div class="hero'+(c.profit<0?' neg':'')+'"><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Gewinn pro Craft</span>'
+      + '<span class="big">'+money(c.profit,true)+'</span></div><span class="marge">'+pct(c.margin)+' Marge</span></div>';
+    if (c.missing) h += '<p class="note">Für mindestens ein Material gibt es keinen AH-Preis – der Gewinn ist zu hoch angesetzt.</p>';
+    // Mengenrechner
+    var lines = c.mats.map(function(m){ return { id:m.id, need:m.qty*qty, p:m.p, have: row(m.id) ? row(m.id)[3] : 0 }; });
+    var short = lines.filter(function(l){ return l.need > l.have; });
+    var totalCost = c.cost * qty, totalNet = c.net * qty, totalProfit = c.profit * qty;
+    h += '<h2 class="sec">Wie oft craften?</h2><div class="box"><div class="line"><span class="stepper">'
+      + '<button type="button" aria-label="Weniger" data-qty="-1">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="999" value="'+qty+'" aria-label="Anzahl">'
+      + '<button type="button" aria-label="Mehr" data-qty="1">+</button></span><span class="quick">'
+      + [1,5,10,20].map(function(v){ return '<button type="button" class="chip" data-qset="'+v+'" aria-pressed="'+(qty===v)+'">'+v+'×</button>'; }).join('') + '</span></div>'
+      + '<div class="line"><span>Materialkosten gesamt</span>'+money(totalCost)+'</div>'
+      + '<div class="line"><span>Erlös gesamt (nach Gebühr)</span>'+money(totalNet)+'</div>'
+      + '<div class="line total"><span>Gewinn gesamt</span><span class="'+(totalProfit<0?'neg':'')+'">'+money(totalProfit,true)+'</span></div></div>';
+    if (short.length) h += '<p class="note">Nicht genug im AH: '+short.map(function(l){ return name(l.id)+' ('+n(l.need)+' nötig, '+n(l.have)+' angeboten)'; }).join(', ')+'.</p>';
+    if (o && qty > o[3] * 0.25) h += '<p class="note">Du würdest '+n(qty)+' Stück anbieten, aktuell sind '+n(o[3])+' im AH. Bei so viel Menge fällt der Preis wahrscheinlich.</p>';
+    h += '<h2 class="sec">Einkaufsliste ('+qty+'×)</h2><div class="box">' + lines.map(function(l){
+        return '<button type="button" class="line" data-open="i:'+l.id+'">'+iconHtml(l.id,'sm')+'<span class="mid"><span style="font-weight:600">'+n(l.need)+'× '+name(l.id)+'</span>'
+          + '<span class="meta">'+(l.p == null ? 'nicht im AH' : moneyTxt(l.p)+' je Stück · '+n(l.have)+' im AH')+'</span></span>'
+          + (l.p == null ? '<span class="tag bad">kein Preis</span>' : trendHtml(dev(l.id))) + '<span style="min-width:72px;text-align:right">'+(l.p == null ? '–' : money(l.p * l.need))+'</span></button>';
+      }).join('') + '</div><button type="button" class="btn primary" id="copyList">Einkaufsliste kopieren</button>';
+    h += '<h2 class="sec">Verkauf je Stück</h2><div class="box">'
+      + '<button type="button" class="line" data-open="i:'+rc.out+'"><span>'+(S.basis === 'min' ? 'Tiefstpreis' : 'Marktpreis')+' ›</span><span style="display:flex;gap:10px;align-items:center">'+trendHtml(dev(rc.out))+money(c.unit)+'</span></button>'
+      + '<div class="line" style="color:var(--soft)"><span>AH-Gebühr '+fee()+' %</span>'+money(-c.fee)+'</div>'
+      + '<div class="line total"><span>Erlös</span>'+money(c.net)+'</div></div>'
+      + '<p class="hint">'+n(o[3])+' Stück im AH · '+n(o[4])+' Auktionen · 7-Tage-Schnitt '+moneyTxt(o[2])+'. Händler- und Schwarzmarktpreise sind noch nicht eingepflegt.</p>';
+    return h;
+  }
+
+  function itemDetail(id){
+    if (!ITEMS[id] && !NAMES[id]) return '<p class="note">Item nicht gefunden.</p>';
+    var r = row(id), d = dev(id), src = NAMES[id] ? 'Name: eigene Übersetzung'+(enName(id)?' („'+esc(enName(id))+'“)':'') : enName(id) ? 'Name: Classic-Datenbank (englisch)' : 'Name unbekannt – neues Forever-Item';
+    var h = '<div><div class="titlerow">'+iconHtml(id,'lg')+'<div><h1 class="q'+qual(id)+'">'+esc(name(id))+'</h1><p class="sub">'+CATS[catOf(id)]+' · Item-ID '+id+' · '+FNAME[S.faction]+'</p></div></div>'
+      + '<p class="hint" style="margin-top:4px">'+src+' · <a href="https://foreverdb.net/item/'+id+'">auf ForeverDB ansehen</a></p></div>';
+    if (!r) h += '<p class="note">Im '+FNAME[S.faction]+'-AH gerade nicht angeboten.</p>';
+    else {
+      var v, cls = '';
+      if (d > 0.05) { cls = 'up'; v = '<b>Gerade teuer – guter Moment zum Verkaufen</b><span>Marktpreis liegt '+pct(d)+' über dem 7-Tage-Schnitt.</span>'; }
+      else if (d < -0.05) { cls = 'down'; v = '<b>Gerade günstig – eher einkaufen, mit Verkauf warten</b><span>Marktpreis liegt '+pct(d).replace('−','')+' unter dem 7-Tage-Schnitt.</span>'; }
+      else v = '<b>Im üblichen Bereich</b><span>Marktpreis liegt '+pct(d)+' vom 7-Tage-Schnitt entfernt.</span>';
+      var lo = Math.min(r[0], r[1], r[2]), hi = Math.max(r[0], r[1], r[2]), span = (hi - lo) || 1;
+      var pos = function(x){ return 4 + (x - lo) / span * 92; };
+      h += '<div class="verdict '+cls+'">'+v+'</div><h2 class="sec">Preise</h2><div class="box">'
+        + '<div class="line"><span>Tiefstpreis</span>'+money(r[0])+'</div>'
+        + '<div class="line"><span>Marktpreis</span><b>'+money(r[1])+'</b></div>'
+        + '<div class="line"><span>7-Tage-Schnitt</span>'+money(r[2])+'</div>'
+        + '<div class="line" style="flex-direction:column;align-items:stretch;gap:6px"><div class="bar" aria-hidden="true"><i style="left:'+pos(r[2])+'%;background:var(--muted)"></i><i style="left:'+pos(r[1])+'%;background:var(--gold)"></i></div>'
+        + '<span class="hint">Gold = Marktpreis, Grau = 7-Tage-Schnitt</span></div>'
+        + '<div class="line"><span>Angebot</span><span class="num">'+n(r[3])+' Stück · '+n(r[4])+' Auktionen</span></div></div>';
+    }
+    h += '<h2 class="sec">Preisverlauf</h2><div class="seg" role="group" aria-label="Zeitraum" id="histSeg">'
+      + [['7','7 Tage'],['30','30 Tage']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(String(S.hist||'7')===o[0])+'">'+o[1]+'</button>'; }).join('')
+      + '</div><div class="box" id="chart" data-item="'+id+'" style="padding:12px 14px"><span class="hint">Lade Verlauf …</span></div>';
+    h += '<h2 class="sec">Alle Fraktionen</h2><div class="box">' + ['A','H','N'].map(function(f){
+      var x = row(id, f);
+      return '<div class="line"><span>'+FNAME[f]+(f===S.faction?' · aktuell':'')+'</span><span style="display:flex;gap:10px;align-items:center">'+(x ? money(S.basis==='min'?x[0]:x[1]) : '–')+trendHtml(dev(id, f))+'</span></div>';
+    }).join('') + '</div><p class="hint">Allianz und Horde handeln nur über Blackwater miteinander (höhere Gebühr).</p>';
+    var uses = RECIPES.filter(function(rc){ return rc.out === id || rc.mats.some(function(m){ return m[0] === id; }); });
+    if (uses.length) h += '<h2 class="sec">Rezepte</h2><div class="box">' + uses.map(function(rc){
+      return '<button type="button" class="line" data-open="r:'+rc.out+'">'+iconHtml(rc.out,'sm')+'<span style="flex:1">'+(rc.out===id?'Hergestellt: ':'Verwendet in: ')+name(rc.out)+'</span><span class="meta">›</span></button>';
+    }).join('') + '</div>';
+    return h;
+  }
+
+  function getShard(kind, f, s){
+    var key = kind+f+s;
+    if (!HIST[key]) HIST[key] = fetch(DATA+kind+'/'+f+'-'+s+'.json', { cache:'no-cache' }).then(function(r){ if (!r.ok) throw 0; return r.json(); }).catch(function(){ delete HIST[key]; return null; });
+    return HIST[key];
+  }
+  function loadChart(id){
+    var long = String(S.hist||'7') === '30', f = S.faction;
+    getShard(long ? 'd' : 'h', f, Number(id) % SHARDS).then(function(D){
+      var box = $('chart'); if (!box || box.dataset.item !== id) return;
+      var pts = [];
+      if (D && D.i[id]) D.i[id].forEach(function(v, k){ var y = long ? (v && v[1]) : v; if (y != null) pts.push([long ? Date.parse(D.t[k]+'T12:00:00Z') : D.t[k], y]); });
+      if (pts.length < 2) { box.innerHTML = '<span class="hint">'+(pts.length ? 'Erster Wert gespeichert ('+dt(pts[0][0])+'). ' : 'Noch keine Werte. ')+'Der Verlauf baut sich mit jedem stündlichen Lauf auf – nach einigen Stunden erscheint hier eine Linie.</span>'; return; }
+      box.innerHTML = chartSvg(pts, long);
+    });
+  }
+  function chartSvg(pts, long){
+    var W = 600, H = 200, L = 8, R = 8, T = 16, B = 26;
+    var xs = pts.map(function(p){ return p[0]; }), ys = pts.map(function(p){ return p[1]; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    if (y1 === y0) { y1 += 1; y0 = Math.max(0, y0 - 1); }
+    var X = function(x){ return L + (x - x0) / ((x1 - x0) || 1) * (W - L - R); }, Y = function(y){ return T + (1 - (y - y0) / (y1 - y0)) * (H - T - B); };
+    var line = pts.map(function(p, i){ return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join('');
+    var area = line + 'L' + X(x1).toFixed(1) + ' ' + (H - B) + 'L' + X(x0).toFixed(1) + ' ' + (H - B) + 'Z';
+    var last = pts[pts.length - 1], hi = pts.reduce(function(a, p){ return p[1] > a[1] ? p : a; }), lo = pts.reduce(function(a, p){ return p[1] < a[1] ? p : a; });
+    var avg = Math.round(ys.reduce(function(a, b){ return a + b; }, 0) / ys.length);
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Preisverlauf Marktpreis" style="display:block">'
+      + '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(avg)+'" y2="'+Y(avg)+'" stroke="var(--line)" stroke-dasharray="4 4"/>'
+      + '<path d="'+area+'" fill="var(--gold)" fill-opacity=".12"/><path d="'+line+'" fill="none" stroke="var(--gold)" stroke-width="2.2" stroke-linejoin="round"/>'
+      + '<circle cx="'+X(last[0])+'" cy="'+Y(last[1])+'" r="4" fill="var(--gold)"/>'
+      + '<text x="'+L+'" y="'+(H-6)+'" font-size="20" fill="var(--muted)">'+dd(x0)+'</text><text x="'+(W-R)+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)" text-anchor="end">'+(long ? dd(x1) : 'jetzt')+'</text></svg>'
+      + '<div class="line" style="padding:8px 0 0;border:0;font-size:13px"><span class="meta">Hoch '+moneyTxt(hi[1])+' · Tief '+moneyTxt(lo[1])+' · Ø '+moneyTxt(avg)+'</span><span class="meta">'+pts.length+(long?' Tage':' Std.')+'</span></div>';
+  }
+  function shoppingText(){
+    var id = sel.slice(2), rc = recipe(id), c = calc(rc), qty = Math.max(1, S.qty[id] || 1);
+    var t = ['Einkaufsliste: '+qty+'× '+name(rc.out)+' ('+FNAME[S.faction]+', Normal)'];
+    c.mats.forEach(function(m){ t.push('- '+(m.qty*qty)+'× '+name(m.id)+(m.p == null ? ' (kein AH-Preis)' : ' – ca. '+moneyTxt(m.p*m.qty*qty))); });
+    t.push('Kosten gesamt: '+moneyTxt(c.cost*qty)+' · Gewinn: '+moneyTxt(c.profit*qty));
+    return t.join('\n');
+  }
+  function copy(text){
+    function fallback(){ var ta = document.createElement('textarea'); ta.className = 'copy'; ta.value = text; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch(e){} ta.remove(); toast(ok ? 'Einkaufsliste kopiert' : 'Kopieren nicht möglich'); }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ toast('Einkaufsliste kopiert'); }, fallback); else fallback(); } catch(e){ fallback(); }
+  }
+
+  // ---------- Navigation ----------
+  function keyToHash(k){ return (k[0]==='r' ? 'rezept-' : 'item-') + k.slice(2); }
+  var openedInApp = false;
+  function openDetail(k, replace){
+    var h = '#'+keyToHash(k);
+    if (replace) location.replace(h); else { openedInApp = true; location.hash = h; }
+  }
+  function closeDetail(){ if (openedInApp && window.innerWidth < 960) history.back(); else location.hash = S.tab; }
+  function step(d){ var i = ctx.indexOf(sel), j = i + d; if (i >= 0 && j >= 0 && j < ctx.length) openDetail(ctx[j], true); }
+
+  var lastTab = null;
+  function route(){
+    var h = (location.hash || '').slice(1);
+    var m = h.match(/^(rezept|item)-(\d+)$/);
+    if (m) {
+      sel = (m[1]==='rezept' ? 'r:' : 'i:') + m[2];
+      if (lastTab !== S.tab) { render(); lastTab = S.tab; }
+      $('pane').classList.add('open');
+      renderDetail();
+      $('pane').scrollTop = 0;
+      if (window.innerWidth < 960) document.body.style.overflow = 'hidden';
+      return;
+    }
+    var tab = ['rezepte','markt','merkliste','einstellungen'].indexOf(h) >= 0 ? h : S.tab;
+    sel = null; openedInApp = false;
+    $('pane').classList.remove('open');
+    document.body.style.overflow = '';
+    var changed = tab !== S.tab || lastTab !== tab;
+    S.tab = tab; save();
+    if (changed) { render(); lastTab = tab; window.scrollTo(0,0); }
+    else document.querySelectorAll('.row.sel').forEach(function(r){ r.classList.remove('sel'); });
+  }
+  window.addEventListener('hashchange', route);
+
+  // ---------- Ereignisse ----------
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('button, [data-open]'); if (!t) return;
+    if (t.dataset.fav) { e.stopPropagation(); toggleFav(t.dataset.fav); render(); return; }
+    if (t.id === 'paneStar') { toggleFav(sel); render(); return; }
+    if (t.dataset.tab) { location.hash = t.dataset.tab; if (location.hash.slice(1) === t.dataset.tab) route(); return; }
+    if (t.dataset.open) { openDetail(t.dataset.open, false); return; }
+    if (t.hasAttribute('data-close')) { closeDetail(); return; }
+    if (t.dataset.nav) { step(Number(t.dataset.nav)); return; }
+    if (t.dataset.faction) { S.faction = t.dataset.faction; save(); render(); return; }
+    if (t.dataset.mcat) { S.mcat = Number(t.dataset.mcat); save(); render(); return; }
+    if (t.dataset.prof) { S.prof = t.dataset.prof; save(); render(); return; }
+    if (t.id === 'onlyProfit') { S.onlyProfit = !S.onlyProfit; save(); render(); return; }
+    if (t.hasAttribute('data-reset')) { Q[S.tab] = ''; if (S.tab === 'rezepte') { S.prof = 'Alle'; S.onlyProfit = false; } if (S.tab === 'markt') S.mcat = -1; save(); render(); return; }
+    if (t.dataset.qty) { var id = sel.slice(2); S.qty[id] = Math.min(999, Math.max(1, (S.qty[id] || 1) + Number(t.dataset.qty))); save(); renderDetail(); return; }
+    if (t.dataset.qset) { S.qty[sel.slice(2)] = Number(t.dataset.qset); save(); renderDetail(); return; }
+    if (t.id === 'copyList') { copy(shoppingText()); return; }
+    var p = t.parentElement && t.parentElement.id;
+    if (p === 'msort') { S.msort = t.dataset.v; save(); render(); return; }
+    if (p === 'themeSeg') { S.theme = t.dataset.v; save(); applyTheme(); render(); return; }
+    if (p === 'histSeg') { S.hist = t.dataset.v; save(); renderDetail(); return; }
+    if (p === 'basisSeg') { S.basis = t.dataset.v; save(); render(); return; }
+    if (t.dataset.fee) { var f = t.dataset.fee.split(','); S[f[0]] = Math.max(0, Math.min(30, S[f[0]] + Number(f[1]))); save(); render(); return; }
+    if (t.id === 'resetBtn') { var fav = S.fav; S = Object.assign({}, DEFAULTS, { tab:'einstellungen', fav:fav, skills:{}, qty:{} }); save(); applyTheme(); render(); toast('Einstellungen zurückgesetzt (Merkliste bleibt)'); return; }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && e.target.dataset && e.target.dataset.open) { openDetail(e.target.dataset.open); return; }
+    if (!sel || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key === 'Escape') closeDetail();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); step(1); }
+  });
+  document.addEventListener('input', function(e){
+    if (e.target.id === 'q') {
+      Q[S.tab] = e.target.value; renderList(); if (sel) renderDetail();
+      return;
+    }
+    if (e.target.dataset && e.target.dataset.skill) {
+      var v = parseInt(e.target.value, 10);
+      if (v > 0) S.skills[e.target.dataset.skill] = Math.min(300, v); else delete S.skills[e.target.dataset.skill];
+      save(); return;
+    }
+    if (e.target.id === 'qty') { var v2 = parseInt(e.target.value, 10); if (v2 > 0) { S.qty[sel.slice(2)] = Math.min(999, v2); save(); } }
+  });
+  document.addEventListener('change', function(e){
+    if (e.target.id === 'sort') { S.sort = e.target.value; save(); render(); }
+    if (e.target.id === 'qty') { renderDetail(); }
+  });
+  // Wischen im Detail
+  var x0 = null, y0 = 0;
+  $('pane').addEventListener('touchstart', function(e){ if (e.target.closest('input,.stepper,.quick')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive:true });
+  $('pane').addEventListener('touchend', function(e){
+    if (x0 === null) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+  });
+
+  $('list').innerHTML = '<div class="empty">Lade Preise …</div>';
+  Promise.all([
+    fetch('./items.json').then(function(r){ return r.json(); }),
+    fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+  ]).then(function(res){
+    CATS = res[0].cats; ICONS = res[0].icons; ITEMS = res[0].items;
+    var L = res[1]; SCANNED = L.scanned || {}; SNAP = { A:L.A || {}, H:L.H || {}, N:L.N || {} };
+    route(); if (!lastTab) { render(); lastTab = S.tab; }
+  }).catch(function(e){
+    $('head').innerHTML = '<h1>Gold-Rechner</h1>';
+    $('list').innerHTML = '<div class="empty">Preise konnten nicht geladen werden.<br>Läuft der Job schon (Reiter „Actions“)?<button type="button" class="btn" onclick="location.reload()">Neu laden</button></div>';
+  });
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState !== 'visible' || !SCANNED.A) return;
+    fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(L){
+      if (!L || !L.scanned || L.scanned.A === SCANNED.A) return;
+      SCANNED = L.scanned; SNAP = { A:L.A, H:L.H, N:L.N }; HIST = {}; render(); toast('Neue Preise geladen');
+    }).catch(function(){});
+  });
+})();
+</script>
+</body>
+</html>
