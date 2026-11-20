@@ -161,6 +161,21 @@
   .toast.show{opacity:1}
   .hidden{display:none !important}
   .row.dim{opacity:.55}
+  .chip[aria-pressed="true"] .meta{color:inherit;opacity:.8}
+  .fsum{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px;color:var(--soft)}
+  .fsum span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tools .search{flex:1;min-width:0}
+  #factionSel{flex:none;width:auto;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);padding:0 10px;font-size:14px;color:var(--text)}
+  .sheethead{display:flex;justify-content:space-between;align-items:center}
+  .linkbtn{border:0;background:none;color:var(--gold);font-size:14px;font-weight:600;cursor:pointer}
+  .fgroup{display:flex;flex-direction:column;gap:6px}
+  .flabel{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .wrapchips{display:flex;flex-wrap:wrap;gap:6px}
+  .sheet select{min-height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 10px;font-size:14px;color:var(--text)}
+  .switch{flex:none;width:44px;height:26px;border-radius:13px;border:0;background:var(--card2);position:relative;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+  .switch i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:10px;background:var(--muted);transition:left .15s}
+  .switch[aria-checked="true"]{background:var(--gold)} .switch[aria-checked="true"] i{left:21px;background:var(--gold-ink)}
+  .skill:disabled{opacity:.4}
   .charttip{position:absolute;top:0;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border-radius:10px;background:var(--text);color:var(--bg);font-size:12px;pointer-events:none;white-space:nowrap}
   .charttip b{font-size:14px}
   .skillrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--soft)}
@@ -257,8 +272,13 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.9';
+  var APP_VERSION = '0.9.1';
   var CHANGES = {
+    '0.9.1': ['Rezepte nach Gruppen: Veredeln, Rüstung, Waffen, Verbrauchbar, Taschen & Zubehör, Sonstiges',
+              'Neues Filter-Fenster: Beruf, Kategorie wie im Spiel, Fertigkeit, „im AH“, „profitabel“, „ab 5 Auktionen“, Sortierung',
+              'Berufe in den Einstellungen ein- und ausblenden, Fertigkeit direkt daneben',
+              'Rezepte mit sehr wenigen Auktionen sind standardmäßig ausgeblendet – keine Ausreißer mehr ganz oben',
+              'Rezepte mit fehlendem Materialpreis rutschen nach unten und sind markiert'],
     '0.9': ['Alle Forever-Rezepte aller Berufe direkt von Blizzard (wöchentlich aktualisiert)',
             'Umschalter „Meine Fertigkeit“ / „Alle anzeigen“ – Rezepte über deiner Fertigkeit sind ausgegraut',
             'Fertigkeit direkt in der Rezeptliste eintragen, sobald ein Beruf gewählt ist',
@@ -280,17 +300,19 @@
   var DATA = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? './out/' : 'https://raw.githubusercontent.com/' + REPO + '/data/';
   var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {}, BZ = {}, SOURCE = '';
   var RECIPES = [], RN = {}, VENDOR = {}, RSRC = '', RUPD = 0, RROWS = [];
-  var PROFS = ['Alle'];
+  var PROFS = ['Alle'], ALLPROFS = [], PCNT = {};
+  function profOn(p){ return (S.hiddenProfs || []).indexOf(p) < 0; }
   function setRecipes(R){
     if (R && R.list && R.list.length) {
       RN = R.items || {}; VENDOR = R.vendor || {}; RSRC = R.source || 'Blizzard-API'; RUPD = R.updated || 0;
-      RECIPES = R.list.map(function(x){ return { id:String(x[0]), prof:(R.profs||{})[x[1]] || String(x[1]), cat:x[2] || '', out:String(x[3]), qty:x[4] || 1, mats:x[5].map(function(m){ return [String(m[0]), m[1]]; }), skill:x[6] }; });
+      RECIPES = R.list.map(function(x){ return { id:String(x[0]), prof:(R.profs||{})[x[1]] || 'Sonstiges', cat:x[2] || '', out:String(x[3]), qty:x[4] || 1, mats:x[5].map(function(m){ return [String(m[0]), m[1]]; }), skill:x[6] }; });
     } else {
       RSRC = 'eingebaut (10 Rezepte)';
       RECIPES = RECIPES_FALLBACK.map(function(r){ return { id:r.out, prof:r.prof, cat:'', out:r.out, qty:1, mats:r.mats, skill:r.skill }; });
     }
     var cnt = {}; RECIPES.forEach(function(r){ cnt[r.prof] = (cnt[r.prof] || 0) + 1; });
-    PROFS = ['Alle'].concat(Object.keys(cnt).sort(function(a,b){ return cnt[b] - cnt[a]; }));
+    ALLPROFS = Object.keys(cnt).sort(function(a,b){ return cnt[b] - cnt[a]; }); PCNT = cnt;
+    PROFS = ['Alle'].concat(ALLPROFS.filter(profOn));
     if (PROFS.indexOf(S.prof) < 0) S.prof = 'Alle';
     S.fav = S.fav.map(function(k){ if (k[0] !== 'r' || recipe(k.slice(2))) return k; var r = RECIPES.filter(function(x){ return x.out === k.slice(2); })[0]; return r ? 'r:'+r.id : k; });
   }
@@ -299,7 +321,7 @@
   function credit(){ return '<p class="credit">AH-Daten: '+(/^forever-prices/.test(SOURCE) ? '<a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Fallback)' : 'Blizzard-API')+' · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard · Forever AH '+APP_VERSION+'</p>'; }
 
   // ---------- Zustand ----------
-  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto', skillMode:'all', onlyAH:true,
+  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto', skillMode:'all', onlyAH:true, minAuc:true, group:'Alle', rcat:'', hiddenProfs:['Angeln','Kräuterkunde','Kürschnerei'],
                    basis:'market', feeF:5, feeN:15, skills:{}, fav:[], qty:{} };
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem('goldapp-gh') || '{}')); } catch(e){}
@@ -363,6 +385,26 @@
   }
   function recipe(id){ for (var i = 0; i < RECIPES.length; i++) if (RECIPES[i].id === id) return RECIPES[i]; return null; }
   function skillOk(rc){ var v = S.skills[rc.prof]; return !(v > 0) || rc.skill == null || rc.skill <= v; }
+  var GROUPS = ['Alle','Veredeln','Rüstung','Waffen','Verbrauchbar','Taschen & Zubehör','Sonstiges'];
+  function groupOf(rc){
+    if (rc.g) return rc.g;
+    var c = rc.cat || '', b = BZ[rc.out], k = b ? b[3] : -1, sc = b ? b[4] : -1, g;
+    if (/Lager aufschlagen/.test(c)) g = 'Sonstiges';
+    else if (k === 2) g = 'Waffen';
+    else if (k === 4) g = sc === 6 ? 'Waffen' : 'Rüstung';
+    else if (k === 0 || k === 6) g = 'Verbrauchbar';
+    else if (k === 1 || k === 11) g = 'Taschen & Zubehör';
+    else if (k === 7) g = sc === 2 ? 'Verbrauchbar' : sc === 3 ? 'Taschen & Zubehör' : 'Veredeln';
+    else if (/Reagenz|Barren|Teile|Transmutation|Stoffballen/.test(c)) g = 'Veredeln';
+    else if (/Tränk|Elixier|Fläschchen|Gebräu|nahrung|Mahlzeit|Getränk|Verbänd|Heil|Sprengstoff|Munition|öl|Öl|Plätzchen|Leckereien|Küchenstile/i.test(c)) g = 'Verbrauchbar';
+    else if (/Tasche|Köcher|Beutel|Geräte|Apparate|Begleiter|Zielfernrohr/.test(c)) g = 'Taschen & Zubehör';
+    else if (/schwert|äxte|kolben|Dolch|Stangen|Faust|Geworfen|Schild|Distanz|Zauberstäbe|Stäbe/i.test(c)) g = 'Waffen';
+    else if (/stulpen|harnisch|stiefel|schütz|gürtel|helm|schulter|armschienen|Umhänge|Roben|Handschuhe|Schuhe|Gamaschen|Kapuzen|Hemden|kopfbedeckung|Rüstungssets/i.test(c)) g = 'Rüstung';
+    else g = 'Sonstiges';
+    if (b) rc.g = g;
+    return g;
+  }
+  function isCamp(rc){ return /Lager aufschlagen/.test(rc.cat || ''); }
   function skillTxt(rc){ return rc.skill == null ? '?' : String(rc.skill); }
   function isFav(k){ return S.fav.indexOf(k) >= 0; }
   function toggleFav(k){ var i = S.fav.indexOf(k); if (i >= 0) S.fav.splice(i,1); else S.fav.push(k); save(); toast(i >= 0 ? 'Von der Merkliste entfernt' : 'Zur Merkliste hinzugefügt'); }
@@ -414,25 +456,28 @@
     var q = Q.rezepte.trim().toLowerCase();
     var all = RECIPES.map(function(r){ return { r:r, c:calc(r) }; });
     var rows = all.filter(function(x){
+      if (!profOn(x.r.prof) || isCamp(x.r)) return false;
       if (S.prof !== 'Alle' && x.r.prof !== S.prof) return false;
+      if (S.prof !== 'Alle' && S.rcat && x.r.cat !== S.rcat) return false;
+      if (S.group !== 'Alle' && groupOf(x.r) !== S.group) return false;
+      if (S.minAuc && x.c.profit != null) { var oo = row(x.r.out); if (!oo || oo[4] < 5) return false; }
       if (S.skillMode === 'mine' && !skillOk(x.r)) return false;
       if (S.onlyAH && x.c.profit == null) return false;
       if (S.onlyProfit && !(x.c.profit > 0)) return false;
       return !q || name(x.r.out).toLowerCase().indexOf(q) >= 0 || x.r.cat.toLowerCase().indexOf(q) >= 0 || x.r.mats.some(function(m){ return name(m[0]).toLowerCase().indexOf(q) >= 0; });
     });
-    var key = { profit:function(x){ return x.c.profit == null ? -1e12 : x.c.profit; }, margin:function(x){ return x.c.margin == null ? -1e12 : x.c.margin; },
+    var key = { profit:function(x){ return x.c.profit == null ? -1e12 : x.c.missing ? x.c.profit - 1e11 : x.c.profit; }, margin:function(x){ return x.c.margin == null ? -1e12 : x.c.missing ? x.c.margin - 1e6 : x.c.margin; },
                 supply:function(x){ var o = row(x.r.out); return o ? o[3] : -1; }, skill:function(x){ return -(x.r.skill == null ? 999 : x.r.skill); } }[S.sort];
     rows.sort(function(a,b){ var fa = isFav('r:'+a.r.id), fb = isFav('r:'+b.r.id); if (fa !== fb) return fa ? -1 : 1; var oa = skillOk(a.r), ob = skillOk(b.r); if (oa !== ob) return oa ? -1 : 1; return key(b) - key(a); });
-    var inProf = all.filter(function(x){ return S.prof === 'Alle' || x.r.prof === S.prof; });
-    return { rows:rows, total:inProf.length, profitable: inProf.filter(function(x){ return x.c.profit > 0 && skillOk(x.r); }) };
+    return { rows:rows, total:rows.length, profitable: rows.filter(function(x){ return x.c.profit > 0 && !x.c.missing && skillOk(x.r); }) };
   }
   function recipeRow(x, i){
     var o = row(x.r.out), right, k = 'r:'+x.r.id, ok = skillOk(x.r), my = S.skills[x.r.prof];
     if (x.c.profit == null) right = '<span class="profit neg">kein Preis</span><span class="meta">–</span>';
     else right = '<span class="profit'+(x.c.profit<0?' neg':'')+'">'+money(x.c.profit,true)+'</span><span class="meta">'+pct(x.c.margin)+'</span>';
     return '<div class="row'+(sel===k?' sel':'')+(ok?'':' dim')+'" data-open="'+k+'" role="button" tabindex="0"><span class="rank">'+(i+1)+'</span>'+iconHtml(x.r.out)
-      + '<span class="mid"><span class="name wrap">'+(x.r.qty > 1 ? x.r.qty+'× ' : '')+esc(name(x.r.out))+'</span><span class="meta">'+(ok ? x.r.prof+' '+skillTxt(x.r) : 'ab '+skillTxt(x.r)+' · du '+my)+' · '+(o ? n(o[3])+' AH' : 'nicht im AH')
-      + (x.c.missing && x.c.profit != null ? ' · <span class="warn">Mat fehlt</span>' : '')+'</span></span>'
+      + '<span class="mid"><span class="name wrap">'+(x.r.qty > 1 ? x.r.qty+'× ' : '')+esc(name(x.r.out))+'</span><span class="meta">'+(ok ? x.r.prof+' '+skillTxt(x.r) : 'ab '+skillTxt(x.r)+' · du '+my)+(x.r.cat && !/SAISON/.test(x.r.cat) ? ' · '+esc(x.r.cat) : '')+' · '+(o ? n(o[4])+' Auk.' : 'nicht im AH')
+      + (x.c.missing && x.c.profit != null ? ' · <span class="warn">Mat ohne Preis</span>' : '')+'</span></span>'
       + '<span class="right">'+right+'</span>'+starBtn(k)+'</div>';
   }
   function itemRow(id){
@@ -447,15 +492,10 @@
     if (S.tab === 'rezepte') {
       var d = recipeRows(), best = d.profitable.slice().sort(function(a,b){ return b.c.profit - a.c.profit; })[0];
       h = '<div class="toprow"><div><h1>Rezepte</h1>'+fresh()+'</div></div>'
-        + '<div class="stats"><span><b>'+n(d.profitable.length)+'</b> von '+n(d.total)+' Rezepten profitabel'+(best ? ' · bestes: <b>'+esc(name(best.r.out))+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
-        + factionSeg() + searchBox('Rezept, Material oder Kategorie …')
-        + '<div class="chips" role="group" aria-label="Beruf">'+PROFS.map(function(p){ return '<button type="button" class="chip" data-prof="'+p+'" aria-pressed="'+(p===S.prof)+'">'+p+'</button>'; }).join('')+'</div>'
-        + '<div class="seg" role="group" aria-label="Fertigkeit" id="skillSeg">'+[['mine','Meine Fertigkeit'],['all','Alle anzeigen']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.skillMode===o[0])+'">'+o[1]+'</button>'; }).join('')+'</div>'
-        + (S.prof !== 'Alle' ? '<label class="skillrow"><span>Deine Fertigkeit in '+S.prof+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="–" data-skill="'+S.prof+'" value="'+(S.skills[S.prof] || '')+'"></label>'
-            : (S.skillMode === 'mine' && !Object.keys(S.skills).length ? '<p class="hint">Wähle einen Beruf und trag deine Fertigkeit ein, damit „Meine Fertigkeit“ filtert.</p>' : ''))
-        + '<div class="tools"><select id="sort" aria-label="Sortierung">'
-        + [['profit','Nach Gewinn'],['margin','Nach Marge'],['supply','Nach Angebot im AH'],['skill','Nach Fertigkeit']].map(function(o){ return '<option value="'+o[0]+'"'+(S.sort===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
-        + '</select><button type="button" class="toggle" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">profitabel</button><button type="button" class="toggle" id="onlyAH" aria-pressed="'+S.onlyAH+'">im AH</button></div>';
+        + '<div class="stats"><span><b>'+n(d.profitable.length)+'</b> von '+n(d.total)+' profitabel'+(best ? ' · bestes: <b>'+esc(name(best.r.out))+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
+        + '<div class="tools">'+searchBox('Suchen …')+'<select id="factionSel" aria-label="Fraktion">'+['A','H','N'].map(function(f){ return '<option value="'+f+'"'+(f===S.faction?' selected':'')+'>'+FNAME[f]+'</option>'; }).join('')+'</select></div>'
+        + '<div class="chips" role="group" aria-label="Gruppe">'+GROUPS.map(function(g){ return '<button type="button" class="chip" data-group="'+g+'" aria-pressed="'+(g===S.group)+'">'+g+'</button>'; }).join('')+'</div>'
+        + '<div class="fsum"><span>'+esc(filterSummary())+'</span><button type="button" class="favbtn" id="filterBtn"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter'+(filterCount() ? ' '+filterCount() : '')+'</button></div>';
     } else if (S.tab === 'markt') {
       var ids = Object.keys(SNAP[S.faction]).filter(liquid), up = ids.filter(function(id){ return dev(id) > 0.05; }).length, dn = ids.filter(function(id){ return dev(id) < -0.05; }).length;
       h = '<div class="toprow"><div class="brand">'+LOGO+'<div><h1>Forever AH</h1>'+fresh()+'</div></div></div>'
@@ -535,13 +575,13 @@
   }
 
   function settingsHtml(){
-    var profs = PROFS.slice(1);
     return '<h2 class="sec">Darstellung</h2><div class="seg" role="group" aria-label="Darstellung" id="themeSeg">'
       + [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.theme===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
-      + '<h2 class="sec">Meine Fertigkeit</h2><div class="box">' + profs.map(function(p){
-          var v = S.skills[p] || '';
-          return '<label class="line"><span>'+p+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="alle" data-skill="'+p+'" value="'+v+'"></label>';
-        }).join('') + '</div><p class="hint">Mit „Meine Fertigkeit“ siehst du nur Rezepte bis zu diesem Wert. Leer = alle. Fertigkeitswerte stammen aus Classic und können in Forever abweichen.</p>'
+      + '<h2 class="sec" id="berufe">Meine Berufe</h2><div class="box">' + ALLPROFS.map(function(p){
+          var on = profOn(p), v = S.skills[p] || '';
+          return '<div class="line"><button type="button" class="switch" data-toggleprof="'+esc(p)+'" role="switch" aria-checked="'+on+'"><i></i></button><span style="flex:1">'+p+' <span class="meta">'+n(PCNT[p]||0)+'</span></span>'
+            + '<input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="Skill" aria-label="Fertigkeit '+p+'" data-skill="'+esc(p)+'" value="'+v+'"'+(on?'':' disabled')+'></div>';
+        }).join('') + '</div><p class="hint">Ausgeschaltete Berufe verschwinden aus Rezepten, Filter und „Verwendet in“. Die Fertigkeit nutzt der Filter „Meine Fertigkeit“. Fertigkeitswerte der Rezepte stammen teils aus Classic und können in Forever abweichen.</p>'
       + '<h2 class="sec">Berechnung</h2><div class="seg" role="group" aria-label="Preisbasis" id="basisSeg">'
       + [['market','Marktpreis'],['min','Tiefstpreis']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.basis===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
       + '<h2 class="sec">AH-Gebühr beim Verkauf</h2><div class="box">'
@@ -562,6 +602,36 @@
       + '<button type="button" class="btn" id="resetBtn" style="align-self:flex-start">Alles auf Standard zurücksetzen</button>' + credit();
   }
 
+  var SORTS = [['profit','Nach Gewinn'],['margin','Nach Marge'],['supply','Nach Angebot im AH'],['skill','Nach Fertigkeit']];
+  function filterCount(){ return (S.prof !== 'Alle' ? 1 : 0) + (S.rcat ? 1 : 0) + (S.skillMode === 'mine' ? 1 : 0) + (S.onlyAH ? 1 : 0) + (S.onlyProfit ? 1 : 0) + (S.minAuc ? 1 : 0); }
+  function filterSummary(){
+    var p = [];
+    p.push(S.prof === 'Alle' ? 'Alle Berufe' : S.prof + (S.skills[S.prof] ? ' '+S.skills[S.prof] : ''));
+    if (S.rcat) p.push(S.rcat);
+    p.push(S.skillMode === 'mine' ? 'Meine Fertigkeit' : 'alle Stufen');
+    if (S.onlyAH) p.push('im AH'); if (S.onlyProfit) p.push('profitabel'); if (S.minAuc) p.push('ab 5 Auk.');
+    return p.join(' · ');
+  }
+  var filterOpen = false;
+  function filterSheet(){
+    var cats = S.prof === 'Alle' ? [] : Object.keys(RECIPES.reduce(function(o, r){ if (r.prof === S.prof && !isCamp(r)) o[r.cat] = 1; return o; }, {})).sort(function(a,b){ return a.localeCompare(b, 'de'); });
+    var cnt = recipeRows().rows.length;
+    return '<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filter">'
+      + '<div class="sheethead"><h2>Filter</h2><button type="button" class="linkbtn" id="fReset">Zurücksetzen</button></div>'
+      + '<div class="fgroup"><span class="flabel">Beruf</span><div class="wrapchips">'+PROFS.map(function(p){ return '<button type="button" class="chip" data-fprof="'+p+'" aria-pressed="'+(p===S.prof)+'">'+p+(p!=='Alle' && S.skills[p] ? ' <span class="meta">'+S.skills[p]+'</span>' : '')+'</button>'; }).join('')
+      + '<button type="button" class="chip" id="fProfs">Berufe ✎</button></div></div>'
+      + (S.prof !== 'Alle' ? '<label class="skillrow"><span>Deine Fertigkeit in '+S.prof+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="–" data-skill="'+S.prof+'" value="'+(S.skills[S.prof] || '')+'"></label>'
+          + '<div class="fgroup"><span class="flabel">Kategorie wie im Spiel</span><select id="fCat"><option value="">Alle Kategorien</option>'+cats.map(function(c){ return '<option'+(c===S.rcat?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>' : '')
+      + '<div class="fgroup"><span class="flabel">Fertigkeit</span><div class="seg" role="group" id="skillSeg">'+[['mine','Meine Fertigkeit'],['all','Alle anzeigen']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.skillMode===o[0])+'">'+o[1]+'</button>'; }).join('')+'</div>'
+      + (S.skillMode === 'mine' && !Object.keys(S.skills).length ? '<p class="hint">Trag bei einem Beruf deine Fertigkeit ein, damit das filtert.</p>' : '')+'</div>'
+      + '<div class="fgroup"><span class="flabel">Markt</span><div class="wrapchips">'
+      + '<button type="button" class="chip" id="onlyAH" aria-pressed="'+S.onlyAH+'">im AH</button><button type="button" class="chip" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">profitabel</button><button type="button" class="chip" id="minAuc" aria-pressed="'+S.minAuc+'">ab 5 Auktionen</button></div></div>'
+      + '<div class="fgroup"><span class="flabel">Sortieren</span><select id="sort">'+SORTS.map(function(o){ return '<option value="'+o[0]+'"'+(S.sort===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')+'</select></div>'
+      + '<button type="button" class="btn primary" id="sheetOk">'+n(cnt)+(cnt===1?' Rezept':' Rezepte')+' anzeigen</button></div></div>';
+  }
+  function openFilter(){ filterOpen = true; $('sheet').innerHTML = filterSheet(); }
+  function refreshFilter(){ var sc = document.querySelector('.sheet'), y = sc ? sc.scrollTop : 0; $('sheet').innerHTML = filterSheet(); var s2 = document.querySelector('.sheet'); if (s2) s2.scrollTop = y; renderHead(); renderList(); }
+  function closeSheet(){ $('sheet').innerHTML = ''; filterOpen = false; }
   function render(){ renderHead(); renderList(); if (sel) renderDetail(); }
 
   // ---------- Details ----------
@@ -646,7 +716,7 @@
       var x = row(id, f);
       return '<div class="line"><span>'+FNAME[f]+(f===S.faction?' · aktuell':'')+'</span><span style="display:flex;gap:10px;align-items:center">'+(x ? money(S.basis==='min'?x[0]:x[1]) : '–')+trendHtml(dev(id, f))+'</span></div>';
     }).join('') + '</div><p class="hint">Allianz und Horde handeln nur über Blackwater miteinander (höhere Gebühr).</p>';
-    var uses = RECIPES.filter(function(rc){ return rc.out === id || rc.mats.some(function(m){ return m[0] === id; }); }).slice(0, 30);
+    var uses = RECIPES.filter(function(rc){ return profOn(rc.prof) && !isCamp(rc) && (rc.out === id || rc.mats.some(function(m){ return m[0] === id; })); }).slice(0, 30);
     if (uses.length) h += '<h2 class="sec">Rezepte</h2><div class="box">' + uses.map(function(rc){
       return '<button type="button" class="line" data-open="r:'+rc.id+'">'+iconHtml(rc.out,'sm')+'<span style="flex:1">'+(rc.out===id?'Hergestellt: ':'Verwendet in: ')+esc(name(rc.out))+' <span class="meta">'+rc.prof+'</span></span><span class="meta">›</span></button>';
     }).join('') + '</div>';
@@ -770,7 +840,14 @@
     if (t.dataset.fav) { e.stopPropagation(); toggleFav(t.dataset.fav); render(); return; }
     if (t.id === 'paneStar') { toggleFav(sel); render(); return; }
     if (t.id === 'updBtn') { location.replace(location.pathname + '?v=' + encodeURIComponent(t.dataset.v) + location.hash); return; }
-    if (t.id === 'sheetOk') { $('sheet').innerHTML = ''; return; }
+    if (t.id === 'sheetOk') { closeSheet(); return; }
+    if (t.id === 'filterBtn') { openFilter(); return; }
+    if (t.id === 'fReset') { S.prof = 'Alle'; S.rcat = ''; S.skillMode = 'all'; S.onlyAH = true; S.onlyProfit = false; S.minAuc = true; S.sort = 'profit'; save(); refreshFilter(); return; }
+    if (t.id === 'fProfs') { closeSheet(); location.hash = 'einstellungen'; setTimeout(function(){ var el = $('berufe'); if (el) el.scrollIntoView(); }, 50); return; }
+    if (t.dataset.fprof) { S.prof = t.dataset.fprof; S.rcat = ''; save(); refreshFilter(); return; }
+    if (t.dataset.group) { S.group = t.dataset.group; save(); render(); return; }
+    if (t.dataset.toggleprof) { var hp = S.hiddenProfs = (S.hiddenProfs || []).slice(), ix = hp.indexOf(t.dataset.toggleprof); if (ix >= 0) hp.splice(ix, 1); else hp.push(t.dataset.toggleprof); PROFS = ['Alle'].concat(ALLPROFS.filter(profOn)); if (!profOn(S.prof)) S.prof = 'Alle'; save(); render(); return; }
+    if (t.id === 'minAuc') { S.minAuc = !S.minAuc; save(); filterOpen ? refreshFilter() : render(); return; }
     if (t.id === 'newsBtn') { showNews(true); return; }
     if (t.id === 'checkBtn') { checkVersion(true); return; }
     if (t.dataset.tab) { location.hash = t.dataset.tab; if (location.hash.slice(1) === t.dataset.tab) route(); return; }
@@ -780,14 +857,14 @@
     if (t.dataset.faction) { S.faction = t.dataset.faction; save(); render(); return; }
     if (t.dataset.mcat) { S.mcat = Number(t.dataset.mcat); save(); render(); return; }
     if (t.dataset.prof) { S.prof = t.dataset.prof; save(); render(); return; }
-    if (t.id === 'onlyProfit') { S.onlyProfit = !S.onlyProfit; save(); render(); return; }
-    if (t.id === 'onlyAH') { S.onlyAH = !S.onlyAH; save(); render(); return; }
+    if (t.id === 'onlyProfit') { S.onlyProfit = !S.onlyProfit; save(); filterOpen ? refreshFilter() : render(); return; }
+    if (t.id === 'onlyAH') { S.onlyAH = !S.onlyAH; save(); filterOpen ? refreshFilter() : render(); return; }
     if (t.hasAttribute('data-reset')) { Q[S.tab] = ''; if (S.tab === 'rezepte') { S.prof = 'Alle'; S.onlyProfit = false; S.onlyAH = false; S.skillMode = 'all'; } if (S.tab === 'markt') S.mcat = -1; save(); render(); return; }
     if (t.dataset.qty) { var id = sel.slice(2); S.qty[id] = Math.min(999, Math.max(1, (S.qty[id] || 1) + Number(t.dataset.qty))); save(); renderDetail(); return; }
     if (t.dataset.qset) { S.qty[sel.slice(2)] = Number(t.dataset.qset); save(); renderDetail(); return; }
     if (t.id === 'copyList') { copy(shoppingText()); return; }
     var p = t.parentElement && t.parentElement.id;
-    if (p === 'skillSeg') { S.skillMode = t.dataset.v; save(); render(); return; }
+    if (p === 'skillSeg') { S.skillMode = t.dataset.v; save(); filterOpen ? refreshFilter() : render(); return; }
     if (p === 'msort') { S.msort = t.dataset.v; save(); render(); return; }
     if (p === 'themeSeg') { S.theme = t.dataset.v; save(); applyTheme(); render(); return; }
     if (p === 'histSeg') { S.hist = t.dataset.v; save(); renderDetail(); return; }
@@ -797,10 +874,10 @@
   });
   document.addEventListener('pointerdown', chartPoint);
   document.addEventListener('pointermove', function(e){ if (e.buttons || e.pointerType === 'mouse') chartPoint(e); });
-  document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') $('sheet').innerHTML = ''; });
+  document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') closeSheet(); });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.open) { openDetail(e.target.dataset.open); return; }
-    if (e.key === 'Escape' && $('sheet').innerHTML) { $('sheet').innerHTML = ''; return; }
+    if (e.key === 'Escape' && $('sheet').innerHTML) { closeSheet(); return; }
     if (!sel || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
     if (e.key === 'Escape') closeDetail();
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
@@ -814,12 +891,15 @@
     if (e.target.dataset && e.target.dataset.skill) {
       var v = parseInt(e.target.value, 10);
       if (v > 0) S.skills[e.target.dataset.skill] = Math.min(300, v); else delete S.skills[e.target.dataset.skill];
-      save(); if (S.tab === 'rezepte') renderList(); return;
+      save(); if (S.tab === 'rezepte') { renderList(); var fs = document.querySelector('.fsum span'); if (fs) fs.textContent = filterSummary(); } return;
     }
     if (e.target.id === 'qty') { var v2 = parseInt(e.target.value, 10); if (v2 > 0) { S.qty[sel.slice(2)] = Math.min(999, v2); save(); } }
   });
   document.addEventListener('change', function(e){
-    if (e.target.id === 'sort') { S.sort = e.target.value; save(); render(); }
+    if (e.target.id === 'sort') { S.sort = e.target.value; save(); filterOpen ? refreshFilter() : render(); }
+    if (e.target.id === 'fCat') { S.rcat = e.target.value; save(); refreshFilter(); }
+    if (e.target.id === 'factionSel') { S.faction = e.target.value; save(); render(); }
+    if (e.target.dataset && e.target.dataset.skill && filterOpen) refreshFilter();
     if (e.target.id === 'qty') { renderDetail(); }
   });
   // Wischen im Detail
@@ -849,7 +929,7 @@
     $('list').innerHTML = '<div class="empty">Preise konnten nicht geladen werden.<br>Läuft der Job schon (Reiter „Actions“)?<button type="button" class="btn" onclick="location.reload()">Neu laden</button></div>';
   });
   // ---------- App-Version ----------
-  function vnum(v){ return String(v||'0').split('.').map(Number).reduce(function(a, x){ return a * 1000 + (x||0); }, 0); }
+  function vnum(v){ var p = String(v||'0').split('.').map(Number); while (p.length < 3) p.push(0); return p.reduce(function(a, x){ return a * 1000 + (x||0); }, 0); }
   function checkVersion(manual){
     fetch('./version.json?t=' + Date.now(), { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(v){
       if (v && vnum(v.version) > vnum(APP_VERSION)) {

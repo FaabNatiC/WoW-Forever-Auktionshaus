@@ -142,8 +142,6 @@ for (const [f, h] of Object.entries(prices)) {
 writeJson(path.join(OUT, 'latest.json'), latest);
 log(`Preise gespeichert (Quelle: ${source}).`, latestOld?.scanned?.A === latest.scanned.A ? 'Kein neuer Scan.' : '');
 
-// ---------- Deutsche Namen und Icons (schrittweise) ----------
-// names.json: { id: [name, qualität 0–5, iconUrl, klasse, unterklasse] }, miss.json: { id: zeitpunkt }
 // ---------- Rezepte aller Berufe (wöchentlich) ----------
 // recipes.json: { updated, profs: { id: name }, items: { id: name }, list: [[rezeptId, berufId, kategorie, ausItem, menge, [[item, anzahl], …], fertigkeit|null]] }
 const RECIPE_MAX_AGE = 7 * 864e5;
@@ -187,21 +185,26 @@ if (token) {
   }
   if (rec) for (const r of rec.list) { RECIPE_IDS.add(r[3]); for (const m of r[5]) RECIPE_IDS.add(m[0]); }
 }
-// ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“) einmalig zur Prüfung der Fertigkeitswerte ablegen
-if (!fs.existsSync(path.join(OUT, 'fdb', 'manifest.json'))) {
-  try {
-    const m = await (await fetch('https://foreverdb.net/downloads/addon-manifest.json')).json();
-    writeJson(path.join(OUT, 'fdb', 'manifest.json'), m);
-    const strs = []; (function walk(x) { if (typeof x === 'string') strs.push(x); else if (x && typeof x === 'object') Object.values(x).forEach(walk); })(m);
-    const files = [...new Set(strs.filter(x => /\.(lua|json|toc|zip|txt)$/i.test(x)).map(x => new URL(x, 'https://foreverdb.net/downloads/').href))];
-    for (const u of files.slice(0, 20)) {
-      const r = await fetch(u); if (!r.ok) continue;
-      const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 8e6) continue;
-      fs.writeFileSync(path.join(OUT, 'fdb', path.basename(new URL(u).pathname)), buf);
-    }
-    log('ForeverDB-Addon-Daten abgelegt:', files.length, 'Dateien');
-  } catch (e) { log('ForeverDB-Addon-Daten nicht geladen:', e.message); }
+// ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“): Rezepte-Datei für die Forever-Fertigkeitswerte, täglich prüfen
+{
+  const dir = path.join(OUT, 'fdb'), mf = path.join(dir, 'Recipes.lua');
+  let age = Infinity; try { age = Date.now() - fs.statSync(mf).mtimeMs; } catch {}
+  if (age > 864e5) {
+    try {
+      const m = await (await fetch('https://foreverdb.net/downloads/addon-manifest.json')).json();
+      writeJson(path.join(dir, 'manifest.json'), m);
+      const f = (m.data?.files || []).find(x => /Recipes\.lua$/.test(x.path));
+      if (!f) throw new Error('Recipes.lua nicht im Manifest');
+      const r = await fetch(new URL(f.url, 'https://foreverdb.net/').href);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      fs.writeFileSync(mf, Buffer.from(await r.arrayBuffer()));
+      log('ForeverDB Recipes.lua geladen:', fs.statSync(mf).size, 'Bytes');
+    } catch (e) { log('ForeverDB-Rezepte nicht geladen:', e.message); }
+  }
 }
+
+// ---------- Deutsche Namen und Icons (schrittweise) ----------
+// names.json: { id: [name, qualität 0–5, iconUrl, klasse, unterklasse] }, miss.json: { id: zeitpunkt }
 const QUAL = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 5, HEIRLOOM: 5 };
 if (token) {
   const names = readJson(path.join(OUT, 'names.json'), {}), miss = readJson(path.join(OUT, 'miss.json'), {});
