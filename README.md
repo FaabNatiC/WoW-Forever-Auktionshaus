@@ -13,6 +13,7 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 - **Meine Berufe:** Berufe in den Einstellungen ein-/ausblenden, Fertigkeit je Beruf
 - **Rezept-Rechner:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
 - **Mengenrechner:** Gesamtkosten und Gewinn für X Crafts, Einkaufsliste zum Kopieren, Warnung bei zu wenig Material im AH
+- **Bester Zeitpunkt:** Kaufen/Verkaufen nach Wochentag und Uhrzeit (4-Stunden-Blöcke, Serverzeit), Heatmap, Hinweis zur Belastbarkeit, Zeitfenster mit wenig Konkurrenz
 - **Preisverlauf:** mit Preisachse, Datumsmarken, Schnittlinie und Antippen für Werte; 7 Tage stündlich, 30 Tage täglich (baut sich ab dem ersten Lauf auf)
 - **Deutsche Forever-Namen und Icons** direkt aus der Blizzard-API (auch für neue Forever-Items)
 - **Item-Detail:** Zurück-Knopf, Position („3 von 120“), Vorheriges/Nächstes, Wischen zum Blättern
@@ -33,8 +34,8 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 | `items.json` | Grunddaten: englische Namen, Kategorien, Icon-Namen |
 | `update.js` | holt Preise und Namen, schreibt den Verlauf |
 | `package.json` | markiert `update.js` als ES-Modul |
-| `.github/workflows/update.yml` | startet `update.js` jede Stunde |
-| Branch `data` | Daten (`latest.json`, `h/` stündlich, `d/` täglich, `names.json` deutsche Namen/Icons, `recipes.json` alle Rezepte), wird bei jedem Lauf ersetzt |
+| `.github/workflows/update.yml` | startet `update.js` alle 15 Minuten; veröffentlicht nur, wenn Blizzard einen neuen AH-Stand hat (manueller Start: immer) |
+| Branch `data` | Daten (`latest.json`, `h/` stündlich, `d/` täglich, `w/` Wochenmuster, `names.json` deutsche Namen/Icons, `recipes.json` alle Rezepte), wird bei jedem Lauf ersetzt |
 
 Die Preisdaten liegen bewusst in einem eigenen Branch, der bei jedem Lauf überschrieben wird. So wächst das Repo nicht mit jeder Stunde.
 

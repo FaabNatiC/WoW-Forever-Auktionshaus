@@ -12,12 +12,15 @@ const RULESET = 2; // Normal
 const HOUSES = { A: 111, H: 114, N: 117 }; // Normal (PvE): Allianz, Horde, Blackwater
 const FALLBACK = 'https://raw.githubusercontent.com/mkborik-cloud/forever-prices/data/prices.lua';
 const SHARDS = 32, HOURS_KEEP = 168, DAYS_KEEP = 30;
+const FORCE = !!process.env.FORCE_UPDATE;          // manueller Start: immer veröffentlichen
+const PATTERN_DECAY = Math.pow(0.6, 1 / 4);        // Muster: Gewicht einer Woche fällt auf 60 % (je Zelle ~4 Werte/Woche)
 const NAME_BUDGET = 3000;          // neue Item-Namen je Lauf
 const RETRY_MISS_MS = 7 * 864e5;   // nicht gefundene Items nach 7 Tagen erneut prüfen
 
 const readJson = (f, fb) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fb; } };
 const writeJson = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(d)); };
 const log = (...a) => console.log(...a);
+const setOutput = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
 
 // ---------- Blizzard ----------
 let token = null;
@@ -64,16 +67,31 @@ function summarize(auctions) {
   return out;
 }
 
-async function pricesFromBlizzard() {
+async function bzHouse(p, ims) {
+  for (let i = 0; i < 3; i++) {
+    const headers = { Authorization: 'Bearer ' + token }; if (ims) headers['If-Modified-Since'] = ims;
+    const r = await fetch(`${API}${p}?namespace=dynamic-forever-eu`, { headers });
+    if (r.status === 304) return { same: true, lm: ims };
+    if (r.status === 429 || r.status >= 500) { await new Promise(s => setTimeout(s, 1000 * (i + 1))); continue; }
+    if (!r.ok) throw new Error(`${p} → ${r.status}`);
+    return { json: await r.json(), lm: r.headers.get('last-modified') };
+  }
+  throw new Error(`${p} → keine Antwort`);
+}
+async function pricesFromBlizzard(old) {
   const res = {};
   for (const [f, hid] of Object.entries(HOUSES)) {
     const base = `/data/wow/ruleset/${RULESET}/auctions/${hid}`;
-    const house = await bz(base, 'dynamic-forever-eu');
+    const prevLm = old?.lm?.[f];
+    let hr = await bzHouse(base, FORCE || !old?.[f] ? null : prevLm);
+    if (hr.same || (hr.lm && hr.lm === prevLm && !FORCE && old?.[f])) { res[f] = { same: true, lm: prevLm, scanned: old.scanned[f], items: old[f] }; log(`Blizzard ${f}/${hid}: unverändert`); continue; }
+    const house = hr.json;
     const comm = await bz(base + '/commodities', 'dynamic-forever-eu').catch(() => null);
     const all = [...(house?.auctions || []), ...(comm?.auctions || [])];
     const items = summarize(all);
     if (Object.keys(items).length < 300) throw new Error(`Haus ${hid}: nur ${Object.keys(items).length} Items`);
-    res[f] = { scanned: Date.now(), items };
+    const t = hr.lm ? Date.parse(hr.lm) : NaN;
+    res[f] = { scanned: Number.isFinite(t) ? t : Date.now(), lm: hr.lm, items };
     log(`Blizzard ${f}/${hid}: ${all.length} Auktionen, ${Object.keys(items).length} Items`);
   }
   return res;
@@ -102,22 +120,54 @@ async function pricesFromFallback() {
 // ---------- Ablauf ----------
 token = await getToken().catch(e => { log('Token:', e.message); return null; });
 let prices, source;
+const latestOld = readJson(path.join(OUT, 'latest.json'), null);
 if (token) {
-  try { prices = await pricesFromBlizzard(); source = 'Blizzard-API'; }
+  try { prices = await pricesFromBlizzard(latestOld); source = 'Blizzard-API'; }
   catch (e) { log('Blizzard-AH fehlgeschlagen, nutze Ausweichquelle:', e.message); }
 }
-if (!prices) { prices = await pricesFromFallback(); source = 'forever-prices (Blizzard-API)'; }
+if (!prices) {
+  prices = await pricesFromFallback(); source = 'forever-prices (Blizzard-API)';
+  for (const f of Object.keys(prices)) if (!FORCE && latestOld?.scanned?.[f] === prices[f].scanned && latestOld?.[f]) { prices[f].same = true; prices[f].items = latestOld[f]; }
+}
+if (Object.values(prices).every(h => h.same) && !FORCE) {
+  log('Kein neuer AH-Stand – nichts zu tun.');
+  setOutput('changed', 'false');
+  process.exit(0);
+}
+setOutput('changed', 'true');
 
-const latestOld = readJson(path.join(OUT, 'latest.json'), null);
-const latest = { updated: Date.now(), source, scanned: {} };
+const latest = { updated: Date.now(), source, scanned: {}, lm: {} };
+const BLOCKS = 6, CELLS = 7 * BLOCKS;
+const berlin = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', weekday: 'short', hour: '2-digit', hourCycle: 'h23' });
+const WD = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+const cellOf = t => { const p = Object.fromEntries(berlin.formatToParts(new Date(t)).map(x => [x.type, x.value])); return WD[p.weekday] * BLOCKS + Math.floor(+p.hour / 4); };
+// Muster je Item: [n, P[42] (‰ ggü. 24-h-Schnitt), W[42] (Gewicht ×10), Q[42] (‰ Angebot ggü. 24-h-Schnitt)]
+function patternAdd(W, id, cell, rel, qrel) {
+  const e = W.i[id] ||= [0, new Array(CELLS).fill(null), new Array(CELLS).fill(0), new Array(CELLS).fill(null)];
+  const w = e[2][cell] / 10 * PATTERN_DECAY + 1;
+  e[1][cell] = Math.round(e[1][cell] == null ? rel : e[1][cell] + (rel - e[1][cell]) / w);
+  if (qrel != null) e[3][cell] = Math.round(e[3][cell] == null ? qrel : e[3][cell] + (qrel - e[3][cell]) / w);
+  e[2][cell] = Math.round(w * 10); e[0]++;
+}
+const avg = a => { const v = a.filter(x => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
 
 for (const [f, h] of Object.entries(prices)) {
-  latest.scanned[f] = h.scanned;
+  latest.scanned[f] = h.scanned; if (h.lm) latest.lm[f] = h.lm;
+  if (h.same) { latest[f] = h.items; continue; }
   const hour = Math.floor(h.scanned / 36e5) * 36e5;
   const day = new Date(h.scanned).toISOString().slice(0, 10);
   for (let s = 0; s < SHARDS; s++) {
     const hf = path.join(OUT, 'h', `${f}-${s}.json`), df = path.join(OUT, 'd', `${f}-${s}.json`);
     const H = readJson(hf, { t: [], i: {} }), D = readJson(df, { t: [], i: {} });
+    const wf = path.join(OUT, 'w', `${f}-${s}.json`), W = readJson(wf, null) || { last: 0, i: {}, q: {} };
+    // Startmuster einmalig aus dem vorhandenen Stundenverlauf
+    if (!W.last && H.t.length) {
+      for (const [id, arr] of Object.entries(H.i)) if ((h.items[id]?.[4] || 0) >= 5) for (let k = 0; k < arr.length; k++) {
+        if (arr[k] == null) continue; const ref = avg(arr.slice(Math.max(0, k - 12), k + 13)); if (!ref) continue;
+        patternAdd(W, id, cellOf(H.t[k]), Math.round((arr[k] / ref - 1) * 1000), null);
+      }
+      W.last = H.t[H.t.length - 1] || 0;
+    }
     let hi = H.t.indexOf(hour); if (hi < 0) { H.t.push(hour); hi = H.t.length - 1; for (const k in H.i) H.i[k].push(null); }
     let di = D.t.indexOf(day);  if (di < 0) { D.t.push(day);  di = D.t.length - 1; for (const k in D.i) D.i[k].push(null); }
     for (const [id, v] of Object.entries(h.items)) {
@@ -133,6 +183,17 @@ for (const [f, h] of Object.entries(prices)) {
     const cutH = Math.max(0, H.t.length - HOURS_KEEP), cutD = Math.max(0, D.t.length - DAYS_KEEP);
     if (cutH) { H.t = H.t.slice(cutH); for (const k in H.i) H.i[k] = H.i[k].slice(cutH); }
     if (cutD) { D.t = D.t.slice(cutD); for (const k in D.i) D.i[k] = D.i[k].slice(cutD); }
+    // Muster fortschreiben (einmal je neuer Stunde, nur Items ab 5 Auktionen)
+    if (hour > W.last) {
+      for (const [id, v] of Object.entries(h.items)) {
+        if (+id % SHARDS !== s || v[4] < 5) continue;
+        const ref = avg((H.i[id] || []).slice(-24)); if (!ref) continue;
+        const qh = (W.q[id] ||= []); qh.push(v[3]); if (qh.length > 24) qh.shift();
+        const qref = avg(qh);
+        patternAdd(W, id, cellOf(hour), Math.round((v[1] / ref - 1) * 1000), qref ? Math.round((v[3] / qref - 1) * 1000) : null);
+      }
+      W.last = hour; writeJson(wf, W);
+    }
     for (const k in H.i) if (H.i[k].every(x => x == null)) delete H.i[k];
     for (const k in D.i) if (D.i[k].every(x => x == null)) delete D.i[k];
     writeJson(hf, H); writeJson(df, D);
@@ -140,7 +201,7 @@ for (const [f, h] of Object.entries(prices)) {
   latest[f] = h.items;
 }
 writeJson(path.join(OUT, 'latest.json'), latest);
-log(`Preise gespeichert (Quelle: ${source}).`, latestOld?.scanned?.A === latest.scanned.A ? 'Kein neuer Scan.' : '');
+log(`Preise gespeichert (Quelle: ${source}).`);
 
 // ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“): Rezepte-Datei für die Forever-Fertigkeitswerte, täglich prüfen
 {
