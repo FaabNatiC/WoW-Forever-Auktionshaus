@@ -2,7 +2,7 @@ name: Preise aktualisieren
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '2,17,32,47 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,12 +32,15 @@ jobs:
           fi
 
       - name: Preise abrufen
+        id: preise
         env:
+          FORCE_UPDATE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
           BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
         run: node update.js out
 
       - name: Daten-Branch veroeffentlichen
+        if: steps.preise.outputs.changed == 'true'
         run: |
           cd out
           git init -q -b data
