@@ -79,7 +79,13 @@
   .tools select{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 10px;font-size:14px}
   .toggle{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:14px;cursor:pointer;white-space:nowrap}
   .toggle[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
-  .listhead{padding:10px 20px 6px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .listhead{position:relative;padding:6px 20px 6px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .sortbtn{display:flex;align-items:center;gap:4px;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+  .sortbtn span{color:var(--muted);font-size:11px}
+  .sortmenu{position:absolute;right:16px;top:calc(100% - 2px);z-index:30;min-width:240px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.25);overflow:hidden}
+  .sortmenu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:11px 14px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font-size:15px;text-align:left;cursor:pointer}
+  .sortmenu button:last-child{border-bottom:0}
+  .sortmenu button[aria-checked="true"]{color:var(--gold);font-weight:600}
   .list{flex:1;padding:0 20px 24px;display:flex;flex-direction:column;gap:8px}
   .row{display:flex;align-items:center;gap:10px;min-height:64px;padding:8px 8px 8px 14px;background:var(--card);border:1px solid var(--line);border-radius:14px;text-align:left;cursor:pointer;width:100%}
   .row.sel{border-color:var(--gold)}
@@ -272,8 +278,14 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.9.1';
+  var APP_VERSION = '0.9.3';
   var CHANGES = {
+    '0.9.3': ['Sortierung direkt über der Liste: Knopf rechts, z. B. „↓ Gewinn“',
+              'Nochmal auf die aktive Sortierung tippen dreht die Richtung um',
+              'Neu: nach Name sortieren (Rezepte) und nach Preis (Auktionshaus)',
+              'Auktionshaus: Sortierung an derselben Stelle wie bei den Rezepten, eine Zeile weniger im Kopf'],
+    '0.9.2': ['Echte Forever-Fertigkeitswerte für alle Rezepte (Data from ForeverDB.net) statt Classic-Werten',
+              'Einstellungen: Scan-Zeit für alle drei Auktionshäuser (Allianz, Horde, Blackwater)'],
     '0.9.1': ['Rezepte nach Gruppen: Veredeln, Rüstung, Waffen, Verbrauchbar, Taschen & Zubehör, Sonstiges',
               'Neues Filter-Fenster: Beruf, Kategorie wie im Spiel, Fertigkeit, „im AH“, „profitabel“, „ab 5 Auktionen“, Sortierung',
               'Berufe in den Einstellungen ein- und ausblenden, Fertigkeit direkt daneben',
@@ -305,7 +317,7 @@
   function setRecipes(R){
     if (R && R.list && R.list.length) {
       RN = R.items || {}; VENDOR = R.vendor || {}; RSRC = R.source || 'Blizzard-API'; RUPD = R.updated || 0;
-      RECIPES = R.list.map(function(x){ return { id:String(x[0]), prof:(R.profs||{})[x[1]] || 'Sonstiges', cat:x[2] || '', out:String(x[3]), qty:x[4] || 1, mats:x[5].map(function(m){ return [String(m[0]), m[1]]; }), skill:x[6] }; });
+      RECIPES = R.list.map(function(x){ return { id:String(x[0]), prof:(R.profs||{})[x[1]] || 'Sonstiges', cat:x[2] || '', out:String(x[3]), qty:x[4] || 1, mats:x[5].map(function(m){ return [String(m[0]), m[1]]; }), skill:x[6], ssrc:x[7] || null }; });
     } else {
       RSRC = 'eingebaut (10 Rezepte)';
       RECIPES = RECIPES_FALLBACK.map(function(r){ return { id:r.out, prof:r.prof, cat:'', out:r.out, qty:1, mats:r.mats, skill:r.skill }; });
@@ -318,14 +330,15 @@
   }
   var FNAME = { A:'Allianz', H:'Horde', N:'Blackwater' };
   var STAR = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="__F__" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>';
-  function credit(){ return '<p class="credit">AH-Daten: '+(/^forever-prices/.test(SOURCE) ? '<a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Fallback)' : 'Blizzard-API')+' · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard · Forever AH '+APP_VERSION+'</p>'; }
+  function credit(){ return '<p class="credit">AH-Daten: '+(/^forever-prices/.test(SOURCE) ? '<a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Fallback)' : 'Blizzard-API')+' · Rezepte: Blizzard-API · Fertigkeit: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard · Forever AH '+APP_VERSION+'</p>'; }
 
   // ---------- Zustand ----------
-  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto', skillMode:'all', onlyAH:true, minAuc:true, group:'Alle', rcat:'', hiddenProfs:['Angeln','Kräuterkunde','Kürschnerei'],
+  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', sortAsc:false, onlyProfit:false, msort:'volume', msortAsc:false, mcat:-1, theme:'auto', skillMode:'all', onlyAH:true, minAuc:true, group:'Alle', rcat:'', hiddenProfs:['Angeln','Kräuterkunde','Kürschnerei'],
                    basis:'market', feeF:5, feeN:15, skills:{}, fav:[], qty:{} };
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem('goldapp-gh') || '{}')); } catch(e){}
   var Q = { rezepte:'', markt:'', merkliste:'' };
+  if (S.msort === 'above') { S.msort = 'dev'; S.msortAsc = false; } else if (S.msort === 'below') { S.msort = 'dev'; S.msortAsc = true; }
   function save(){ try { localStorage.setItem('goldapp-gh', JSON.stringify(S)); } catch(e){} }
   function applyTheme(){ if (S.theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', S.theme); }
   applyTheme();
@@ -466,9 +479,17 @@
       if (S.onlyProfit && !(x.c.profit > 0)) return false;
       return !q || name(x.r.out).toLowerCase().indexOf(q) >= 0 || x.r.cat.toLowerCase().indexOf(q) >= 0 || x.r.mats.some(function(m){ return name(m[0]).toLowerCase().indexOf(q) >= 0; });
     });
-    var key = { profit:function(x){ return x.c.profit == null ? -1e12 : x.c.missing ? x.c.profit - 1e11 : x.c.profit; }, margin:function(x){ return x.c.margin == null ? -1e12 : x.c.missing ? x.c.margin - 1e6 : x.c.margin; },
-                supply:function(x){ var o = row(x.r.out); return o ? o[3] : -1; }, skill:function(x){ return -(x.r.skill == null ? 999 : x.r.skill); } }[S.sort];
-    rows.sort(function(a,b){ var fa = isFav('r:'+a.r.id), fb = isFav('r:'+b.r.id); if (fa !== fb) return fa ? -1 : 1; var oa = skillOk(a.r), ob = skillOk(b.r); if (oa !== ob) return oa ? -1 : 1; return key(b) - key(a); });
+    var key = { profit:function(x){ return x.c.profit; }, margin:function(x){ return x.c.margin; },
+                supply:function(x){ var o = row(x.r.out); return o ? o[3] : null; }, skill:function(x){ return x.r.skill; } }[S.sort] || function(x){ return x.c.profit; };
+    var dir = S.sortAsc ? 1 : -1;
+    rows.sort(function(a,b){
+      var fa = isFav('r:'+a.r.id), fb = isFav('r:'+b.r.id); if (fa !== fb) return fa ? -1 : 1;
+      var oa = skillOk(a.r), ob = skillOk(b.r); if (oa !== ob) return oa ? -1 : 1;
+      if (S.sort === 'name') return dir * name(a.r.out).localeCompare(name(b.r.out), 'de');
+      if ((S.sort === 'profit' || S.sort === 'margin') && a.c.missing !== b.c.missing) return a.c.missing ? 1 : -1;
+      var ka = key(a), kb = key(b); if (ka == null && kb == null) return 0; if (ka == null) return 1; if (kb == null) return -1;
+      return dir * (ka - kb);
+    });
     return { rows:rows, total:rows.length, profitable: rows.filter(function(x){ return x.c.profit > 0 && !x.c.missing && skillOk(x.r); }) };
   }
   function recipeRow(x, i){
@@ -501,9 +522,7 @@
       h = '<div class="toprow"><div class="brand">'+LOGO+'<div><h1>Forever AH</h1>'+fresh()+'</div></div></div>'
         + '<div class="stats"><span><b>'+n(Object.keys(SNAP[S.faction]).length)+'</b> Items im AH · <b class="trend down">▼ '+dn+'</b> unter · <b class="trend up">▲ '+up+'</b> über dem 7-Tage-Schnitt</span></div>'
         + factionSeg() + searchBox('Item suchen (deutsch/englisch oder ID) …')
-        + '<div class="chips" role="group" aria-label="Kategorie">'+[-1].concat(CAT_ORDER).map(function(c){ return '<button type="button" class="chip" data-mcat="'+c+'" aria-pressed="'+(S.mcat===c)+'">'+(c<0?'Alle':CATS[c])+'</button>'; }).join('')+'</div>'
-        + '<div class="seg" role="group" aria-label="Sortierung" id="msort">'
-        + [['volume','Angebot'],['above','Über Ø'],['below','Unter Ø'],['name','A–Z']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.msort===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>';
+        + '<div class="chips" role="group" aria-label="Kategorie">'+[-1].concat(CAT_ORDER).map(function(c){ return '<button type="button" class="chip" data-mcat="'+c+'" aria-pressed="'+(S.mcat===c)+'">'+(c<0?'Alle':CATS[c])+'</button>'; }).join('')+'</div>';
     } else if (S.tab === 'merkliste') {
       h = '<div class="toprow"><div><h1>Merkliste</h1>'+fresh()+'</div></div>'
         + '<div class="stats"><span><b>'+S.fav.length+'</b> gemerkte Einträge</span></div>' + factionSeg();
@@ -519,16 +538,17 @@
     var q = Q.markt.trim().toLowerCase();
     var ids = Object.keys(SNAP[S.faction]).filter(function(id){
       if (S.mcat >= 0 && catOf(id) !== S.mcat) return false;
-      if ((S.msort === 'above' || S.msort === 'below') && !liquid(id)) return false;
+      if (S.msort === 'dev' && !liquid(id)) return false;
       return !q || name(id).toLowerCase().indexOf(q) >= 0 || enName(id).toLowerCase().indexOf(q) >= 0 || id === q;
     });
     var vol = function(id){ var r = row(id); return r ? r[4] : 0; };
     ids.sort(function(a,b){
       var fa = isFav('i:'+a), fb = isFav('i:'+b); if (fa !== fb) return fa ? -1 : 1;
-      if (S.msort === 'name') return name(a).localeCompare(name(b), 'de');
-      if (S.msort === 'volume') return vol(b) - vol(a);
-      var da = dev(a), db = dev(b); if (da == null) return 1; if (db == null) return -1;
-      return S.msort === 'above' ? db - da : da - db;
+      var d = S.msortAsc ? 1 : -1;
+      if (S.msort === 'name') return d * name(a).localeCompare(name(b), 'de');
+      var ka = S.msort === 'price' ? price(a) : S.msort === 'dev' ? dev(a) : vol(a), kb = S.msort === 'price' ? price(b) : S.msort === 'dev' ? dev(b) : vol(b);
+      if (ka == null && kb == null) return 0; if (ka == null) return 1; if (kb == null) return -1;
+      return d * (ka - kb);
     });
     return ids;
   }
@@ -547,12 +567,12 @@
     ctx = [];
     if (S.tab === 'rezepte') {
       var d = recipeRows(); RROWS = d.rows; shown = PAGE;
-      lh = '<span>'+n(d.rows.length)+(d.rows.length===1?' Rezept':' Rezepte')+'</span><span>Gewinn · Marge pro Craft</span>';
+      lh = '<span>'+n(d.rows.length)+(d.rows.length===1?' Rezept':' Rezepte')+'</span>'+sortBtn();
       html = d.rows.length ? d.rows.slice(0, shown).map(recipeRow).join('') + (d.rows.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Keine Rezepte für diese Auswahl.');
       ctx = d.rows.map(function(x){ return 'r:'+x.r.id; });
     } else if (S.tab === 'markt') {
       var ids = marketIds();
-      lh = '<span>'+n(ids.length)+' Items'+(S.msort==='above'||S.msort==='below' ? ' · ab 5 Auktionen' : '')+'</span><span>Marktpreis · ggü. 7-Tage-Schnitt</span>';
+      lh = '<span>'+n(ids.length)+' Items'+(S.msort==='dev' ? ' · ab 5 Auktionen' : '')+'</span>'+sortBtn();
       shown = PAGE;
       html = ids.length ? ids.slice(0, shown).map(itemRow).join('') + (ids.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Kein Item gefunden.');
       ctx = ids.map(function(id){ return 'i:'+id; });
@@ -581,7 +601,7 @@
           var on = profOn(p), v = S.skills[p] || '';
           return '<div class="line"><button type="button" class="switch" data-toggleprof="'+esc(p)+'" role="switch" aria-checked="'+on+'"><i></i></button><span style="flex:1">'+p+' <span class="meta">'+n(PCNT[p]||0)+'</span></span>'
             + '<input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="Skill" aria-label="Fertigkeit '+p+'" data-skill="'+esc(p)+'" value="'+v+'"'+(on?'':' disabled')+'></div>';
-        }).join('') + '</div><p class="hint">Ausgeschaltete Berufe verschwinden aus Rezepten, Filter und „Verwendet in“. Die Fertigkeit nutzt der Filter „Meine Fertigkeit“. Fertigkeitswerte der Rezepte stammen teils aus Classic und können in Forever abweichen.</p>'
+        }).join('') + '</div><p class="hint">Ausgeschaltete Berufe verschwinden aus Rezepten, Filter und „Verwendet in“. Die Fertigkeit nutzt der Filter „Meine Fertigkeit“. Fertigkeitswerte der Rezepte: ForeverDB.net.</p>'
       + '<h2 class="sec">Berechnung</h2><div class="seg" role="group" aria-label="Preisbasis" id="basisSeg">'
       + [['market','Marktpreis'],['min','Tiefstpreis']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.basis===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
       + '<h2 class="sec">AH-Gebühr beim Verkauf</h2><div class="box">'
@@ -589,7 +609,7 @@
       + '<div class="line"><span>Blackwater</span><span class="stepper"><button type="button" aria-label="Gebühr senken" data-fee="feeN,-1">−</button><span class="num" style="width:48px;text-align:center;font-weight:600">'+S.feeN+' %</span><button type="button" aria-label="Gebühr erhöhen" data-fee="feeN,1">+</button></span></div>'
       + '</div><p class="hint">Blizzard hat die Gebühren für Forever nicht veröffentlicht. Vorgabe: Classic-Werte (5 % / 15 %).</p>'
       + '<h2 class="sec">Datenstand</h2><div class="box">'
-      + '<div class="line"><span>AH-Scan '+FNAME[S.faction]+'</span><span class="num">'+(SCANNED[S.faction] ? dt(SCANNED[S.faction]) : '–')+'</span></div>'
+      + ['A','H','N'].map(function(f){ return '<div class="line"><span>AH-Scan '+FNAME[f]+'</span><span class="num">'+(SCANNED[f] ? dt(SCANNED[f]) : '–')+'</span></div>'; }).join('')
       + '<div class="line"><span>Aktualisierung</span><span>stündlich (GitHub Actions)</span></div>'
       + '<div class="line"><span>Preisquelle</span><span>'+esc(SOURCE || '–')+'</span></div>'
       + '<div class="line"><span>Deutsche Namen</span><span class="num">'+n(Object.keys(BZ).length)+' Items</span></div>'
@@ -602,7 +622,23 @@
       + '<button type="button" class="btn" id="resetBtn" style="align-self:flex-start">Alles auf Standard zurücksetzen</button>' + credit();
   }
 
-  var SORTS = [['profit','Nach Gewinn'],['margin','Nach Marge'],['supply','Nach Angebot im AH'],['skill','Nach Fertigkeit']];
+  var SORTS = [['profit','Gewinn'],['margin','Marge'],['supply','Angebot im AH'],['skill','Fertigkeit'],['name','Name']];
+  var MSORTS = [['volume','Angebot'],['price','Preis'],['dev','Abweichung vom Ø'],['name','Name']];
+  function sortState(){ return S.tab === 'markt' ? { list:MSORTS, v:S.msort, asc:S.msortAsc } : { list:SORTS, v:S.sort, asc:S.sortAsc }; }
+  function sortLabel(st){ var o = st.list.filter(function(x){ return x[0] === st.v; })[0] || st.list[0]; return o[1]; }
+  function dirTxt(st){ return st.v === 'name' ? (st.asc ? 'A–Z' : 'Z–A') : st.v === 'dev' ? (st.asc ? 'unter Ø zuerst' : 'über Ø zuerst') : (st.asc ? 'aufsteigend' : 'absteigend'); }
+  function sortBtn(){ var st = sortState(); return '<button type="button" class="sortbtn" id="sortBtn" aria-haspopup="true" aria-label="Sortierung: '+sortLabel(st)+', '+dirTxt(st)+'">'+(st.asc ? '↑' : '↓')+' '+sortLabel(st)+' <span aria-hidden="true">▾</span></button>'; }
+  function sortMenu(){
+    var st = sortState();
+    return '<div class="sortmenu" id="sortMenu" role="menu">'+st.list.map(function(o){ var on = o[0] === st.v;
+      return '<button type="button" role="menuitemradio" aria-checked="'+on+'" data-sortv="'+o[0]+'"><span>'+o[1]+'</span><span class="meta">'+(on ? (st.asc ? '↑ ' : '↓ ')+dirTxt(st)+' · tippen zum Umdrehen' : '')+'</span></button>'; }).join('')+'</div>';
+  }
+  function setSort(v){
+    var mk = S.tab === 'markt', cur = mk ? S.msort : S.sort;
+    if (v === cur) { if (mk) S.msortAsc = !S.msortAsc; else S.sortAsc = !S.sortAsc; }
+    else { if (mk) { S.msort = v; S.msortAsc = v === 'name'; } else { S.sort = v; S.sortAsc = v === 'name' || v === 'skill'; } }
+    save(); render();
+  }
   function filterCount(){ return (S.prof !== 'Alle' ? 1 : 0) + (S.rcat ? 1 : 0) + (S.skillMode === 'mine' ? 1 : 0) + (S.onlyAH ? 1 : 0) + (S.onlyProfit ? 1 : 0) + (S.minAuc ? 1 : 0); }
   function filterSummary(){
     var p = [];
@@ -626,7 +662,6 @@
       + (S.skillMode === 'mine' && !Object.keys(S.skills).length ? '<p class="hint">Trag bei einem Beruf deine Fertigkeit ein, damit das filtert.</p>' : '')+'</div>'
       + '<div class="fgroup"><span class="flabel">Markt</span><div class="wrapchips">'
       + '<button type="button" class="chip" id="onlyAH" aria-pressed="'+S.onlyAH+'">im AH</button><button type="button" class="chip" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">profitabel</button><button type="button" class="chip" id="minAuc" aria-pressed="'+S.minAuc+'">ab 5 Auktionen</button></div></div>'
-      + '<div class="fgroup"><span class="flabel">Sortieren</span><select id="sort">'+SORTS.map(function(o){ return '<option value="'+o[0]+'"'+(S.sort===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')+'</select></div>'
       + '<button type="button" class="btn primary" id="sheetOk">'+n(cnt)+(cnt===1?' Rezept':' Rezepte')+' anzeigen</button></div></div>';
   }
   function openFilter(){ filterOpen = true; $('sheet').innerHTML = filterSheet(); }
@@ -657,7 +692,7 @@
     var c = calc(rc), o = row(rc.out), qty = Math.max(1, S.qty[id] || 1);
     var h = '<div class="titlerow">'+iconHtml(rc.out,'lg')+'<div><h1 class="q'+qual(rc.out)+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+(rc.cat ? ' · '+esc(rc.cat) : '')+' · '+(rc.skill == null ? 'Fertigkeit unbekannt' : 'ab Fertigkeit '+rc.skill)+(rc.qty > 1 ? ' · ergibt '+rc.qty+' Stück' : '')+' · '+FNAME[S.faction]+'</p></div></div>';
     if (!skillOk(rc)) h += '<p class="note">Über deiner eingetragenen Fertigkeit ('+S.skills[rc.prof]+').</p>';
-    if (rc.skill != null && RECIPES.length > 20) h += '<p class="hint">Fertigkeitswert aus Classic – in Forever kann er abweichen.</p>';
+    if (rc.ssrc === 'classic') h += '<p class="hint">Fertigkeitswert aus Classic – in Forever kann er abweichen.</p>';
     if (c.profit == null) return h + '<p class="note">Das Ergebnis-Item wird im '+FNAME[S.faction]+'-AH gerade nicht angeboten – kein Verkaufspreis.</p>';
     h += '<div class="hero'+(c.profit<0?' neg':'')+'"><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Gewinn pro Craft</span>'
       + '<span class="big">'+money(c.profit,true)+'</span></div><span class="marge">'+pct(c.margin)+' Marge</span></div>';
@@ -842,7 +877,9 @@
     if (t.id === 'updBtn') { location.replace(location.pathname + '?v=' + encodeURIComponent(t.dataset.v) + location.hash); return; }
     if (t.id === 'sheetOk') { closeSheet(); return; }
     if (t.id === 'filterBtn') { openFilter(); return; }
-    if (t.id === 'fReset') { S.prof = 'Alle'; S.rcat = ''; S.skillMode = 'all'; S.onlyAH = true; S.onlyProfit = false; S.minAuc = true; S.sort = 'profit'; save(); refreshFilter(); return; }
+    if (t.id === 'sortBtn') { var mm = $('sortMenu'); if (mm) mm.remove(); else $('listhead').insertAdjacentHTML('beforeend', sortMenu()); return; }
+    if (t.dataset.sortv) { setSort(t.dataset.sortv); return; }
+    if (t.id === 'fReset') { S.prof = 'Alle'; S.rcat = ''; S.skillMode = 'all'; S.onlyAH = true; S.onlyProfit = false; S.minAuc = true; save(); refreshFilter(); return; }
     if (t.id === 'fProfs') { closeSheet(); location.hash = 'einstellungen'; setTimeout(function(){ var el = $('berufe'); if (el) el.scrollIntoView(); }, 50); return; }
     if (t.dataset.fprof) { S.prof = t.dataset.fprof; S.rcat = ''; save(); refreshFilter(); return; }
     if (t.dataset.group) { S.group = t.dataset.group; save(); render(); return; }
@@ -874,7 +911,7 @@
   });
   document.addEventListener('pointerdown', chartPoint);
   document.addEventListener('pointermove', function(e){ if (e.buttons || e.pointerType === 'mouse') chartPoint(e); });
-  document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') closeSheet(); });
+  document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') closeSheet(); var mm = $('sortMenu'); if (mm && !e.target.closest('#sortMenu,#sortBtn')) mm.remove(); });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.open) { openDetail(e.target.dataset.open); return; }
     if (e.key === 'Escape' && $('sheet').innerHTML) { closeSheet(); return; }

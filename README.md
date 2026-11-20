@@ -7,7 +7,8 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 ## Funktionen
 
 - **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
-- **Rezepte:** alle Forever-Rezepte aller Berufe (Blizzard-API, wöchentlich), Gruppen (Veredeln, Rüstung, Waffen, Verbrauchbar, Taschen & Zubehör, Sonstiges), Filter-Fenster mit Beruf, Kategorie wie im Spiel, Fertigkeit, „im AH“, „profitabel“, „ab 5 Auktionen“ und Sortierung, Händlerpreise für Materialien
+- **Rezepte:** alle Forever-Rezepte aller Berufe (Blizzard-API, wöchentlich), Gruppen (Veredeln, Rüstung, Waffen, Verbrauchbar, Taschen & Zubehör, Sonstiges), Filter-Fenster mit Beruf, Kategorie wie im Spiel, Fertigkeit, „im AH“, „profitabel“ und „ab 5 Auktionen“
+- **Sortierung** direkt über jeder Liste (Rezepte: Gewinn, Marge, Angebot, Fertigkeit, Name · AH: Angebot, Preis, Abweichung vom Ø, Name), erneutes Tippen dreht die Richtung um, Händlerpreise für Materialien
 - **Meine Berufe:** Berufe in den Einstellungen ein-/ausblenden, Fertigkeit je Beruf
 - **Rezept-Rechner:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
 - **Mengenrechner:** Gesamtkosten und Gewinn für X Crafts, Einkaufsliste zum Kopieren, Warnung bei zu wenig Material im AH
