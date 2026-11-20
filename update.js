@@ -144,7 +144,64 @@ log(`Preise gespeichert (Quelle: ${source}).`, latestOld?.scanned?.A === latest.
 
 // ---------- Deutsche Namen und Icons (schrittweise) ----------
 // names.json: { id: [name, qualität 0–5, iconUrl, klasse, unterklasse] }, miss.json: { id: zeitpunkt }
-const RECIPE_IDS = new Set(['1710','3372','2692','3357','3928','8925','3713','8838','13446','13464','14529','14530','14047','14048','13931','13759','159','3575','2772','3860','3858','12359','10620']);
+// ---------- Rezepte aller Berufe (wöchentlich) ----------
+// recipes.json: { updated, profs: { id: name }, items: { id: name }, list: [[rezeptId, berufId, kategorie, ausItem, menge, [[item, anzahl], …], fertigkeit|null]] }
+const RECIPE_MAX_AGE = 7 * 864e5;
+const CLASSIC = readJson(new URL('./classic.json', import.meta.url), { skill: {}, vendor: {} });
+async function buildRecipes() {
+  const NS = 'static-forever-eu', L = '&locale=de_DE';
+  const idx = await bz('/data/wow/profession/index', NS, L);
+  if (!idx?.professions?.length) throw new Error('Berufe-Index leer');
+  const profs = {}, refs = [];
+  for (const p of idx.professions) {
+    const pd = await bz(`/data/wow/profession/${p.id}`, NS, L);
+    for (const t of pd?.skill_tiers || []) {
+      const td = await bz(`/data/wow/profession/${p.id}/skill-tier/${t.id}`, NS, L);
+      for (const c of td?.categories || []) for (const r of c.recipes || []) refs.push([r.id, p.id, c.name]);
+    }
+    profs[p.id] = p.name;
+  }
+  const list = [], items = {}; let err = 0;
+  const work = async ([rid, pid, cat]) => {
+    try {
+      const r = await bz(`/data/wow/recipe/${rid}`, NS, L);
+      const out = r?.crafted_item?.id; if (!out) return;   // Verzauberungen u. Ä. ohne Item
+      items[out] = r.crafted_item.name;
+      const mats = (r.reagents || []).map(x => { items[x.reagent.id] = x.reagent.name; return [String(x.reagent.id), x.quantity]; });
+      list.push([rid, pid, cat, String(out), r.crafted_quantity?.value || 1, mats, CLASSIC.skill[out] ?? null]);
+    } catch (e) { if (++err <= 3) log('Rezept', rid, e.message); }
+  };
+  for (let i = 0; i < refs.length; i += 20) await Promise.all(refs.slice(i, i + 20).map(work));
+  list.sort((a, b) => a[0] - b[0]);
+  log(`Rezepte: ${list.length} mit Item (von ${refs.length}), ${Object.keys(profs).length} Berufe, ${err} Fehler`);
+  if (list.length < 50) throw new Error('zu wenige Rezepte');
+  return { updated: Date.now(), source: 'Blizzard-API', profs, items, vendor: CLASSIC.vendor, list };
+}
+let RECIPE_IDS = new Set();
+if (token) {
+  const file = path.join(OUT, 'recipes.json'), old = readJson(file, null);
+  let rec = old;
+  if (!old || Date.now() - old.updated > RECIPE_MAX_AGE || process.env.RECIPES_FORCE) {
+    try { rec = await buildRecipes(); writeJson(file, rec); }
+    catch (e) { log('Rezepte nicht aktualisiert:', e.message); }
+  }
+  if (rec) for (const r of rec.list) { RECIPE_IDS.add(r[3]); for (const m of r[5]) RECIPE_IDS.add(m[0]); }
+}
+// ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“) einmalig zur Prüfung der Fertigkeitswerte ablegen
+if (!fs.existsSync(path.join(OUT, 'fdb', 'manifest.json'))) {
+  try {
+    const m = await (await fetch('https://foreverdb.net/downloads/addon-manifest.json')).json();
+    writeJson(path.join(OUT, 'fdb', 'manifest.json'), m);
+    const strs = []; (function walk(x) { if (typeof x === 'string') strs.push(x); else if (x && typeof x === 'object') Object.values(x).forEach(walk); })(m);
+    const files = [...new Set(strs.filter(x => /\.(lua|json|toc|zip|txt)$/i.test(x)).map(x => new URL(x, 'https://foreverdb.net/downloads/').href))];
+    for (const u of files.slice(0, 20)) {
+      const r = await fetch(u); if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 8e6) continue;
+      fs.writeFileSync(path.join(OUT, 'fdb', path.basename(new URL(u).pathname)), buf);
+    }
+    log('ForeverDB-Addon-Daten abgelegt:', files.length, 'Dateien');
+  } catch (e) { log('ForeverDB-Addon-Daten nicht geladen:', e.message); }
+}
 const QUAL = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 5, HEIRLOOM: 5 };
 if (token) {
   const names = readJson(path.join(OUT, 'names.json'), {}), miss = readJson(path.join(OUT, 'miss.json'), {});

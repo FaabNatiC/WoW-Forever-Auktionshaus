@@ -7,9 +7,10 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 ## Funktionen
 
 - **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
-- **Rezepte:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
+- **Rezepte:** alle Forever-Rezepte aller Berufe (Blizzard-API, wöchentlich), Umschalter „Meine Fertigkeit“ / „Alle anzeigen“, Filter „im AH“ und „profitabel“, Händlerpreise für Materialien
+- **Rezept-Rechner:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
 - **Mengenrechner:** Gesamtkosten und Gewinn für X Crafts, Einkaufsliste zum Kopieren, Warnung bei zu wenig Material im AH
-- **Preisverlauf:** 7 Tage stündlich, 30 Tage täglich (baut sich ab dem ersten Lauf auf)
+- **Preisverlauf:** mit Preisachse, Datumsmarken, Schnittlinie und Antippen für Werte; 7 Tage stündlich, 30 Tage täglich (baut sich ab dem ersten Lauf auf)
 - **Deutsche Forever-Namen und Icons** direkt aus der Blizzard-API (auch für neue Forever-Items)
 - **Item-Detail:** Zurück-Knopf, Position („3 von 120“), Vorheriges/Nächstes, Wischen zum Blättern
 - **Update-Hinweis:** Banner bei neuer App-Version, danach „Was ist neu“ (auch unter Einstellungen)
@@ -23,11 +24,12 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 | `index.html` | die App |
 | `version.json` | aktuelle App-Version – bei jedem Update erhöhen, sonst erscheint kein Hinweis |
 | `manifest.json`, `icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App-Name und Logo |
+| `classic.json` | Fertigkeitswerte und Händlerpreise aus Classic (wow-classic-items) als Ergänzung zu Blizzard |
 | `items.json` | Grunddaten: englische Namen, Kategorien, Icon-Namen |
 | `update.js` | holt Preise und Namen, schreibt den Verlauf |
 | `package.json` | markiert `update.js` als ES-Modul |
 | `.github/workflows/update.yml` | startet `update.js` jede Stunde |
-| Branch `data` | Daten (`latest.json`, `h/` stündlich, `d/` täglich, `names.json` deutsche Namen/Icons), wird bei jedem Lauf ersetzt |
+| Branch `data` | Daten (`latest.json`, `h/` stündlich, `d/` täglich, `names.json` deutsche Namen/Icons, `recipes.json` alle Rezepte), wird bei jedem Lauf ersetzt |
 
 Die Preisdaten liegen bewusst in einem eigenen Branch, der bei jedem Lauf überschrieben wird. So wächst das Repo nicht mit jeder Stunde.
 
@@ -45,7 +47,7 @@ Hinweis: GitHub pausiert geplante Workflows nach 60 Tagen ohne Aktivität im Rep
 - **AH-Preise:** Blizzard-API (Forever, EU). Fällt sie aus, springt [forever-prices](https://github.com/mkborik-cloud/forever-prices) ein. Die genutzte Quelle steht in der App unter Einstellungen.
 - **Item-Namen/Icons:** Blizzard-API (deutsch), je Lauf bis zu 3.000 Items, Rezept-Items und viel gehandelte Items zuerst
 - **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
-- **Rezepte:** Forever-Client laut [ForeverDB.net](https://foreverdb.net)
+- **Rezepte:** Blizzard-API (Forever, Berufe und Rezepte, deutsch), Fertigkeitswerte vorerst aus Classic – können in Forever abweichen
 - **Grunddaten:** [wow-classic-items](https://github.com/nexus-devs/wow-classic-items) (MIT), Icon-Grafiken © Blizzard Entertainment
 - Häuser-Zuordnung Normal = 111/114/117 ist eine Annahme
 

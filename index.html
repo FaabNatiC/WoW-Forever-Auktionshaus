@@ -160,6 +160,12 @@
   .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s}
   .toast.show{opacity:1}
   .hidden{display:none !important}
+  .row.dim{opacity:.55}
+  .charttip{position:absolute;top:0;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border-radius:10px;background:var(--text);color:var(--bg);font-size:12px;pointer-events:none;white-space:nowrap}
+  .charttip b{font-size:14px}
+  .skillrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--soft)}
+  .tools select{flex:1;min-width:0}
+  .tools .toggle{padding:0 10px}
   .brand{display:flex;align-items:center;gap:10px}
   .brand svg{flex:none;border-radius:9px}
   .backbtn{display:flex;align-items:center;gap:2px;min-height:40px;padding:0 10px 0 4px;border:0;background:none;color:var(--gold);font-size:15px;font-weight:600;cursor:pointer;border-radius:10px}
@@ -238,7 +244,7 @@
 (function(){
   var NAMES = {"3357":"Lebenswurz","3372":"Bleiphiole","2692":"Heiße Gewürze","8838":"Sonnengras","3713":"Beruhigende Gewürze","8925":"Kristallphiole","13464":"Goldener Sansam","14047":"Runenstoff","14048":"Runenstoffballen","10620":"Thoriumerz","12359":"Thoriumbarren","13759":"Roher Nachtflossenschnapper","159":"Erfrischendes Quellwasser","13931":"Nachtflossensuppe","14530":"Schwerer Runenstoffverband","14529":"Runenstoffverband","3858":"Mithrilerz","3860":"Mithrilbarren","2772":"Eisenerz","3575":"Eisenbarren","1710":"Großer Heiltrank","3928":"Erstklassiger Heiltrank","13446":"Erheblicher Heiltrank"};
   // Forever-Rezepte laut ForeverDB (Client-Build 1.60.1.70938, Stand 18.11.2026)
-  var RECIPES = [
+  var RECIPES_FALLBACK = [
     { out:'1710',  prof:'Erste Hilfe', skill:155, mats:[['3372',1],['2692',3],['3357',1]] },
     { out:'3928',  prof:'Erste Hilfe', skill:215, mats:[['8925',1],['3713',1],['8838',1]] },
     { out:'13446', prof:'Erste Hilfe', skill:275, mats:[['8925',1],['3713',3],['13464',1]] },
@@ -251,8 +257,14 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.8';
+  var APP_VERSION = '0.9';
   var CHANGES = {
+    '0.9': ['Alle Forever-Rezepte aller Berufe direkt von Blizzard (wöchentlich aktualisiert)',
+            'Umschalter „Meine Fertigkeit“ / „Alle anzeigen“ – Rezepte über deiner Fertigkeit sind ausgegraut',
+            'Fertigkeit direkt in der Rezeptliste eintragen, sobald ein Beruf gewählt ist',
+            'Filter „im AH“ und „profitabel“, Liste lädt beim Scrollen nach',
+            'Händlermaterialien (z. B. Garn, Phiolen) werden mit Händlerpreis gerechnet',
+            'Preisverlauf mit Preisachse, Datumsmarken, beschriftetem Schnitt und Antippen für Werte'],
     '0.8': ['Neuer Name „Forever AH“ mit eigenem Logo – auch auf dem Home-Bildschirm',
             'Die App startet im Auktionshaus, Rezepte sind der zweite Bereich',
             'Hinweis, sobald eine neue App-Version verfügbar ist, und diese Übersicht nach jedem Update',
@@ -267,13 +279,27 @@
   var REPO = 'FaabNatiC/WoW-Forever-Auktionshaus';
   var DATA = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? './out/' : 'https://raw.githubusercontent.com/' + REPO + '/data/';
   var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {}, BZ = {}, SOURCE = '';
-  var PROFS = ['Alle','Erste Hilfe','Schneiderei','Kochkunst','Bergbau'];
+  var RECIPES = [], RN = {}, VENDOR = {}, RSRC = '', RUPD = 0, RROWS = [];
+  var PROFS = ['Alle'];
+  function setRecipes(R){
+    if (R && R.list && R.list.length) {
+      RN = R.items || {}; VENDOR = R.vendor || {}; RSRC = R.source || 'Blizzard-API'; RUPD = R.updated || 0;
+      RECIPES = R.list.map(function(x){ return { id:String(x[0]), prof:(R.profs||{})[x[1]] || String(x[1]), cat:x[2] || '', out:String(x[3]), qty:x[4] || 1, mats:x[5].map(function(m){ return [String(m[0]), m[1]]; }), skill:x[6] }; });
+    } else {
+      RSRC = 'eingebaut (10 Rezepte)';
+      RECIPES = RECIPES_FALLBACK.map(function(r){ return { id:r.out, prof:r.prof, cat:'', out:r.out, qty:1, mats:r.mats, skill:r.skill }; });
+    }
+    var cnt = {}; RECIPES.forEach(function(r){ cnt[r.prof] = (cnt[r.prof] || 0) + 1; });
+    PROFS = ['Alle'].concat(Object.keys(cnt).sort(function(a,b){ return cnt[b] - cnt[a]; }));
+    if (PROFS.indexOf(S.prof) < 0) S.prof = 'Alle';
+    S.fav = S.fav.map(function(k){ if (k[0] !== 'r' || recipe(k.slice(2))) return k; var r = RECIPES.filter(function(x){ return x.out === k.slice(2); })[0]; return r ? 'r:'+r.id : k; });
+  }
   var FNAME = { A:'Allianz', H:'Horde', N:'Blackwater' };
   var STAR = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="__F__" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>';
   function credit(){ return '<p class="credit">AH-Daten: '+(/^forever-prices/.test(SOURCE) ? '<a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Fallback)' : 'Blizzard-API')+' · Rezepte: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard · Forever AH '+APP_VERSION+'</p>'; }
 
   // ---------- Zustand ----------
-  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto',
+  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', onlyProfit:false, msort:'volume', mcat:-1, theme:'auto', skillMode:'all', onlyAH:true,
                    basis:'market', feeF:5, feeN:15, skills:{}, fav:[], qty:{} };
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem('goldapp-gh') || '{}')); } catch(e){}
@@ -287,16 +313,16 @@
   function price(id, f){ var r = row(id, f); if (!r) return null; return S.basis === 'min' ? r[0] : r[1]; }
   function fee(){ return S.faction === 'N' ? S.feeN : S.feeF; }
   function calc(rc){
-    var mats = rc.mats.map(function(m){ var p = price(m[0]); return { id:m[0], qty:m[1], p:p, total: p == null ? null : p * m[1] }; });
+    var mats = rc.mats.map(function(m){ var p = price(m[0]), v = VENDOR[m[0]], src = 'ah'; if (v != null && (p == null || v < p)) { p = v; src = 'vendor'; } return { id:m[0], qty:m[1], p:p, src:src, total: p == null ? null : p * m[1] }; });
     var missing = mats.some(function(m){ return m.total == null; });
     var cost = mats.reduce(function(s,m){ return s + (m.total || 0); }, 0);
-    var unit = price(rc.out);
+    var unit = price(rc.out); if (unit != null) unit *= (rc.qty || 1);
     if (unit == null) return { mats:mats, missing:true, cost:cost, profit:null, margin:null };
     var f = Math.round(unit * fee() / 100), net = unit - f, profit = net - cost;
     return { mats:mats, missing:missing, cost:cost, unit:unit, fee:f, net:net, profit:profit, margin: cost > 0 ? profit/cost : 0 };
   }
   function dev(id, f){ var r = row(id, f); if (!r || !r[2]) return null; return r[1] / r[2] - 1; }
-  function name(id){ return (BZ[id] && BZ[id][0]) || NAMES[id] || (ITEMS[id] && ITEMS[id][0]) || ('Forever-Item #'+id); }
+  function name(id){ return (BZ[id] && BZ[id][0]) || RN[id] || NAMES[id] || (ITEMS[id] && ITEMS[id][0]) || ('Forever-Item #'+id); }
   function enName(id){ return (ITEMS[id] && ITEMS[id][0]) || ''; }
   function qual(id){ return BZ[id] ? BZ[id][1] : ITEMS[id] ? ITEMS[id][2] : 1; }
   var BZCAT = { '7:5':0, '7:9':1, '7:7':2, '7:6':3, '7:8':4, '7:10':5, '7:12':5 };
@@ -335,8 +361,9 @@
     var img = (iconsOk && url) ? '<img class="icimg" src="'+url+'" alt="" loading="lazy" decoding="async">' : '';
     return '<span class="ic '+(size||'')+' qb'+q+'" aria-hidden="true"><svg width="'+px+'" height="'+px+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+GLYPH[c]+'</svg>'+img+'</span>';
   }
-  function recipe(id){ return RECIPES.filter(function(r){ return r.out === id; })[0]; }
-  function skillOk(rc){ var v = S.skills[rc.prof]; return !(v > 0) || rc.skill <= v; }
+  function recipe(id){ for (var i = 0; i < RECIPES.length; i++) if (RECIPES[i].id === id) return RECIPES[i]; return null; }
+  function skillOk(rc){ var v = S.skills[rc.prof]; return !(v > 0) || rc.skill == null || rc.skill <= v; }
+  function skillTxt(rc){ return rc.skill == null ? '?' : String(rc.skill); }
   function isFav(k){ return S.fav.indexOf(k) >= 0; }
   function toggleFav(k){ var i = S.fav.indexOf(k); if (i >= 0) S.fav.splice(i,1); else S.fav.push(k); save(); toast(i >= 0 ? 'Von der Merkliste entfernt' : 'Zur Merkliste hinzugefügt'); }
 
@@ -386,23 +413,25 @@
   function recipeRows(){
     var q = Q.rezepte.trim().toLowerCase();
     var all = RECIPES.map(function(r){ return { r:r, c:calc(r) }; });
-    var bySkill = all.filter(function(x){ return skillOk(x.r); });
-    var rows = bySkill.filter(function(x){
-      return (S.prof === 'Alle' || x.r.prof === S.prof)
-        && (!q || name(x.r.out).toLowerCase().indexOf(q) >= 0 || x.r.mats.some(function(m){ return name(m[0]).toLowerCase().indexOf(q) >= 0; }))
-        && (!S.onlyProfit || (x.c.profit != null && x.c.profit > 0));
+    var rows = all.filter(function(x){
+      if (S.prof !== 'Alle' && x.r.prof !== S.prof) return false;
+      if (S.skillMode === 'mine' && !skillOk(x.r)) return false;
+      if (S.onlyAH && x.c.profit == null) return false;
+      if (S.onlyProfit && !(x.c.profit > 0)) return false;
+      return !q || name(x.r.out).toLowerCase().indexOf(q) >= 0 || x.r.cat.toLowerCase().indexOf(q) >= 0 || x.r.mats.some(function(m){ return name(m[0]).toLowerCase().indexOf(q) >= 0; });
     });
     var key = { profit:function(x){ return x.c.profit == null ? -1e12 : x.c.profit; }, margin:function(x){ return x.c.margin == null ? -1e12 : x.c.margin; },
-                supply:function(x){ var o = row(x.r.out); return o ? o[3] : -1; }, skill:function(x){ return -x.r.skill; } }[S.sort];
-    rows.sort(function(a,b){ var fa = isFav('r:'+a.r.out), fb = isFav('r:'+b.r.out); if (fa !== fb) return fa ? -1 : 1; return key(b) - key(a); });
-    return { rows:rows, total:all.length, hidden:all.length - bySkill.length, profitable: bySkill.filter(function(x){ return x.c.profit > 0; }) };
+                supply:function(x){ var o = row(x.r.out); return o ? o[3] : -1; }, skill:function(x){ return -(x.r.skill == null ? 999 : x.r.skill); } }[S.sort];
+    rows.sort(function(a,b){ var fa = isFav('r:'+a.r.id), fb = isFav('r:'+b.r.id); if (fa !== fb) return fa ? -1 : 1; var oa = skillOk(a.r), ob = skillOk(b.r); if (oa !== ob) return oa ? -1 : 1; return key(b) - key(a); });
+    var inProf = all.filter(function(x){ return S.prof === 'Alle' || x.r.prof === S.prof; });
+    return { rows:rows, total:inProf.length, profitable: inProf.filter(function(x){ return x.c.profit > 0 && skillOk(x.r); }) };
   }
   function recipeRow(x, i){
-    var o = row(x.r.out), right, k = 'r:'+x.r.out;
+    var o = row(x.r.out), right, k = 'r:'+x.r.id, ok = skillOk(x.r), my = S.skills[x.r.prof];
     if (x.c.profit == null) right = '<span class="profit neg">kein Preis</span><span class="meta">–</span>';
     else right = '<span class="profit'+(x.c.profit<0?' neg':'')+'">'+money(x.c.profit,true)+'</span><span class="meta">'+pct(x.c.margin)+'</span>';
-    return '<div class="row'+(sel===k?' sel':'')+'" data-open="'+k+'" role="button" tabindex="0"><span class="rank">'+(i+1)+'</span>'+iconHtml(x.r.out)
-      + '<span class="mid"><span class="name wrap">'+esc(name(x.r.out))+'</span><span class="meta">'+x.r.prof+' '+x.r.skill+' · '+(o ? n(o[3])+' AH' : 'nicht im AH')
+    return '<div class="row'+(sel===k?' sel':'')+(ok?'':' dim')+'" data-open="'+k+'" role="button" tabindex="0"><span class="rank">'+(i+1)+'</span>'+iconHtml(x.r.out)
+      + '<span class="mid"><span class="name wrap">'+(x.r.qty > 1 ? x.r.qty+'× ' : '')+esc(name(x.r.out))+'</span><span class="meta">'+(ok ? x.r.prof+' '+skillTxt(x.r) : 'ab '+skillTxt(x.r)+' · du '+my)+' · '+(o ? n(o[3])+' AH' : 'nicht im AH')
       + (x.c.missing && x.c.profit != null ? ' · <span class="warn">Mat fehlt</span>' : '')+'</span></span>'
       + '<span class="right">'+right+'</span>'+starBtn(k)+'</div>';
   }
@@ -418,12 +447,15 @@
     if (S.tab === 'rezepte') {
       var d = recipeRows(), best = d.profitable.slice().sort(function(a,b){ return b.c.profit - a.c.profit; })[0];
       h = '<div class="toprow"><div><h1>Rezepte</h1>'+fresh()+'</div></div>'
-        + '<div class="stats"><span><b>'+d.profitable.length+'</b> von '+(d.total - d.hidden)+' Rezepten profitabel'+(best ? ' · bestes: <b>'+name(best.r.out)+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
-        + factionSeg() + searchBox('Rezept oder Material suchen …')
+        + '<div class="stats"><span><b>'+n(d.profitable.length)+'</b> von '+n(d.total)+' Rezepten profitabel'+(best ? ' · bestes: <b>'+esc(name(best.r.out))+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
+        + factionSeg() + searchBox('Rezept, Material oder Kategorie …')
         + '<div class="chips" role="group" aria-label="Beruf">'+PROFS.map(function(p){ return '<button type="button" class="chip" data-prof="'+p+'" aria-pressed="'+(p===S.prof)+'">'+p+'</button>'; }).join('')+'</div>'
+        + '<div class="seg" role="group" aria-label="Fertigkeit" id="skillSeg">'+[['mine','Meine Fertigkeit'],['all','Alle anzeigen']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.skillMode===o[0])+'">'+o[1]+'</button>'; }).join('')+'</div>'
+        + (S.prof !== 'Alle' ? '<label class="skillrow"><span>Deine Fertigkeit in '+S.prof+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="–" data-skill="'+S.prof+'" value="'+(S.skills[S.prof] || '')+'"></label>'
+            : (S.skillMode === 'mine' && !Object.keys(S.skills).length ? '<p class="hint">Wähle einen Beruf und trag deine Fertigkeit ein, damit „Meine Fertigkeit“ filtert.</p>' : ''))
         + '<div class="tools"><select id="sort" aria-label="Sortierung">'
         + [['profit','Nach Gewinn'],['margin','Nach Marge'],['supply','Nach Angebot im AH'],['skill','Nach Fertigkeit']].map(function(o){ return '<option value="'+o[0]+'"'+(S.sort===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
-        + '</select><button type="button" class="toggle" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">nur profitable</button></div>';
+        + '</select><button type="button" class="toggle" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">profitabel</button><button type="button" class="toggle" id="onlyAH" aria-pressed="'+S.onlyAH+'">im AH</button></div>';
     } else if (S.tab === 'markt') {
       var ids = Object.keys(SNAP[S.faction]).filter(liquid), up = ids.filter(function(id){ return dev(id) > 0.05; }).length, dn = ids.filter(function(id){ return dev(id) < -0.05; }).length;
       h = '<div class="toprow"><div class="brand">'+LOGO+'<div><h1>Forever AH</h1>'+fresh()+'</div></div></div>'
@@ -461,8 +493,8 @@
     return ids;
   }
   function moreItems(){
-    if (S.tab !== 'markt' || shown >= ctx.length) return;
-    var add = ctx.slice(shown, shown + PAGE).map(function(k){ return itemRow(k.slice(2)); }).join('');
+    if ((S.tab !== 'markt' && S.tab !== 'rezepte') || shown >= ctx.length) return;
+    var add = S.tab === 'rezepte' ? RROWS.slice(shown, shown + PAGE).map(function(x, j){ return recipeRow(x, shown + j); }).join('') : ctx.slice(shown, shown + PAGE).map(function(k){ return itemRow(k.slice(2)); }).join('');
     shown += PAGE;
     var m = $('more'); if (!m) return;
     m.insertAdjacentHTML('beforebegin', add);
@@ -474,10 +506,10 @@
     var lh = '', html = '';
     ctx = [];
     if (S.tab === 'rezepte') {
-      var d = recipeRows();
-      lh = '<span>'+d.rows.length+(d.rows.length===1?' Rezept':' Rezepte')+(d.hidden ? ' · '+d.hidden+' ausgeblendet (Fertigkeit)' : '')+'</span><span>Gewinn · Marge pro Craft</span>';
-      html = d.rows.length ? d.rows.map(recipeRow).join('') : emptyBox('Keine Rezepte für diese Auswahl.');
-      ctx = d.rows.map(function(x){ return 'r:'+x.r.out; });
+      var d = recipeRows(); RROWS = d.rows; shown = PAGE;
+      lh = '<span>'+n(d.rows.length)+(d.rows.length===1?' Rezept':' Rezepte')+'</span><span>Gewinn · Marge pro Craft</span>';
+      html = d.rows.length ? d.rows.slice(0, shown).map(recipeRow).join('') + (d.rows.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Keine Rezepte für diese Auswahl.');
+      ctx = d.rows.map(function(x){ return 'r:'+x.r.id; });
     } else if (S.tab === 'markt') {
       var ids = marketIds();
       lh = '<span>'+n(ids.length)+' Items'+(S.msort==='above'||S.msort==='below' ? ' · ab 5 Auktionen' : '')+'</span><span>Marktpreis · ggü. 7-Tage-Schnitt</span>';
@@ -509,7 +541,7 @@
       + '<h2 class="sec">Meine Fertigkeit</h2><div class="box">' + profs.map(function(p){
           var v = S.skills[p] || '';
           return '<label class="line"><span>'+p+'</span><input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="alle" data-skill="'+p+'" value="'+v+'"></label>';
-        }).join('') + '</div><p class="hint">Leer lassen = alle Rezepte zeigen. Mit Wert werden Rezepte über deiner Stufe ausgeblendet.</p>'
+        }).join('') + '</div><p class="hint">Mit „Meine Fertigkeit“ siehst du nur Rezepte bis zu diesem Wert. Leer = alle. Fertigkeitswerte stammen aus Classic und können in Forever abweichen.</p>'
       + '<h2 class="sec">Berechnung</h2><div class="seg" role="group" aria-label="Preisbasis" id="basisSeg">'
       + [['market','Marktpreis'],['min','Tiefstpreis']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.basis===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
       + '<h2 class="sec">AH-Gebühr beim Verkauf</h2><div class="box">'
@@ -522,7 +554,7 @@
       + '<div class="line"><span>Preisquelle</span><span>'+esc(SOURCE || '–')+'</span></div>'
       + '<div class="line"><span>Deutsche Namen</span><span class="num">'+n(Object.keys(BZ).length)+' Items</span></div>'
       + '<div class="line"><span>Markt</span><span>Normal (PvE) · EU</span></div>'
-      + '<div class="line"><span>Rezepte</span><span>Forever-Client 1.60.1.70938</span></div></div>'
+      + '<div class="line"><span>Rezepte</span><span>'+n(RECIPES.length)+' · '+esc(RSRC)+(RUPD ? ' · '+dt(RUPD).slice(0,10) : '')+'</span></div></div>'
       + '<p class="hint">Annahme: Normal = Häuser 111 (Allianz), 114 (Horde), 117 (Blackwater).</p>'
       + '<h2 class="sec">App</h2><div class="box"><div class="line"><span>Version</span><span class="num">'+APP_VERSION+'</span></div>'
       + '<button type="button" class="line" id="newsBtn"><span>Was ist neu?</span><span class="meta">›</span></button>'
@@ -553,15 +585,16 @@
   function recipeDetail(id){
     var rc = recipe(id); if (!rc) return '<p class="note">Rezept nicht gefunden.</p>';
     var c = calc(rc), o = row(rc.out), qty = Math.max(1, S.qty[id] || 1);
-    var h = '<div class="titlerow">'+iconHtml(rc.out,'lg')+'<div><h1 class="q'+qual(rc.out)+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+' · ab Fertigkeit '+rc.skill+' · Forever-Rezept · '+FNAME[S.faction]+'</p></div></div>';
+    var h = '<div class="titlerow">'+iconHtml(rc.out,'lg')+'<div><h1 class="q'+qual(rc.out)+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+(rc.cat ? ' · '+esc(rc.cat) : '')+' · '+(rc.skill == null ? 'Fertigkeit unbekannt' : 'ab Fertigkeit '+rc.skill)+(rc.qty > 1 ? ' · ergibt '+rc.qty+' Stück' : '')+' · '+FNAME[S.faction]+'</p></div></div>';
     if (!skillOk(rc)) h += '<p class="note">Über deiner eingetragenen Fertigkeit ('+S.skills[rc.prof]+').</p>';
+    if (rc.skill != null && RECIPES.length > 20) h += '<p class="hint">Fertigkeitswert aus Classic – in Forever kann er abweichen.</p>';
     if (c.profit == null) return h + '<p class="note">Das Ergebnis-Item wird im '+FNAME[S.faction]+'-AH gerade nicht angeboten – kein Verkaufspreis.</p>';
     h += '<div class="hero'+(c.profit<0?' neg':'')+'"><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Gewinn pro Craft</span>'
       + '<span class="big">'+money(c.profit,true)+'</span></div><span class="marge">'+pct(c.margin)+' Marge</span></div>';
     if (c.missing) h += '<p class="note">Für mindestens ein Material gibt es keinen AH-Preis – der Gewinn ist zu hoch angesetzt.</p>';
     // Mengenrechner
-    var lines = c.mats.map(function(m){ return { id:m.id, need:m.qty*qty, p:m.p, have: row(m.id) ? row(m.id)[3] : 0 }; });
-    var short = lines.filter(function(l){ return l.need > l.have; });
+    var lines = c.mats.map(function(m){ return { id:m.id, need:m.qty*qty, p:m.p, src:m.src, have: row(m.id) ? row(m.id)[3] : 0 }; });
+    var short = lines.filter(function(l){ return l.src !== 'vendor' && l.need > l.have; });
     var totalCost = c.cost * qty, totalNet = c.net * qty, totalProfit = c.profit * qty;
     h += '<h2 class="sec">Wie oft craften?</h2><div class="box"><div class="line"><span class="stepper">'
       + '<button type="button" aria-label="Weniger" data-qty="-1">−</button><input id="qty" type="number" inputmode="numeric" min="1" max="999" value="'+qty+'" aria-label="Anzahl">'
@@ -574,19 +607,19 @@
     if (o && qty > o[3] * 0.25) h += '<p class="note">Du würdest '+n(qty)+' Stück anbieten, aktuell sind '+n(o[3])+' im AH. Bei so viel Menge fällt der Preis wahrscheinlich.</p>';
     h += '<h2 class="sec">Einkaufsliste ('+qty+'×)</h2><div class="box">' + lines.map(function(l){
         return '<button type="button" class="line" data-open="i:'+l.id+'">'+iconHtml(l.id,'sm')+'<span class="mid"><span style="font-weight:600">'+n(l.need)+'× '+name(l.id)+'</span>'
-          + '<span class="meta">'+(l.p == null ? 'nicht im AH' : moneyTxt(l.p)+' je Stück · '+n(l.have)+' im AH')+'</span></span>'
+          + '<span class="meta">'+(l.p == null ? 'nicht im AH' : l.src === 'vendor' ? 'Händler: '+moneyTxt(l.p)+' je Stück' : moneyTxt(l.p)+' je Stück · '+n(l.have)+' im AH')+'</span></span>'
           + (l.p == null ? '<span class="tag bad">kein Preis</span>' : trendHtml(dev(l.id))) + '<span style="min-width:72px;text-align:right">'+(l.p == null ? '–' : money(l.p * l.need))+'</span></button>';
       }).join('') + '</div><button type="button" class="btn primary" id="copyList">Einkaufsliste kopieren</button>';
     h += '<h2 class="sec">Verkauf je Stück</h2><div class="box">'
       + '<button type="button" class="line" data-open="i:'+rc.out+'"><span>'+(S.basis === 'min' ? 'Tiefstpreis' : 'Marktpreis')+' ›</span><span style="display:flex;gap:10px;align-items:center">'+trendHtml(dev(rc.out))+money(c.unit)+'</span></button>'
       + '<div class="line" style="color:var(--soft)"><span>AH-Gebühr '+fee()+' %</span>'+money(-c.fee)+'</div>'
       + '<div class="line total"><span>Erlös</span>'+money(c.net)+'</div></div>'
-      + '<p class="hint">'+n(o[3])+' Stück im AH · '+n(o[4])+' Auktionen · 7-Tage-Schnitt '+moneyTxt(o[2])+'. Händler- und Schwarzmarktpreise sind noch nicht eingepflegt.</p>';
+      + '<p class="hint">'+n(o[3])+' Stück im AH · '+n(o[4])+' Auktionen · 7-Tage-Schnitt '+moneyTxt(o[2])+'. Händlerpreise für Materialien: Classic-Werte.</p>';
     return h;
   }
 
   function itemDetail(id){
-    if (!ITEMS[id] && !NAMES[id] && !BZ[id] && !row(id)) return '<p class="note">Item nicht gefunden.</p>';
+    if (!ITEMS[id] && !NAMES[id] && !BZ[id] && !RN[id] && !row(id)) return '<p class="note">Item nicht gefunden.</p>';
     var r = row(id), d = dev(id), src = BZ[id] ? 'Name: Blizzard (Forever, deutsch)'+(enName(id)?' · engl. „'+esc(enName(id))+'“':'') : NAMES[id] ? 'Name: eigene Übersetzung'+(enName(id)?' („'+esc(enName(id))+'“)':'') : enName(id) ? 'Name: Classic-Datenbank (englisch)' : 'Name unbekannt – neues Forever-Item';
     var h = '<div><div class="titlerow">'+iconHtml(id,'lg')+'<div><h1 class="q'+qual(id)+'">'+esc(name(id))+'</h1><p class="sub">'+CATS[catOf(id)]+' · Item-ID '+id+' · '+FNAME[S.faction]+'</p></div></div>'
       + '<p class="hint" style="margin-top:4px">'+src+' · <a href="https://foreverdb.net/item/'+id+'">auf ForeverDB ansehen</a></p></div>';
@@ -613,9 +646,9 @@
       var x = row(id, f);
       return '<div class="line"><span>'+FNAME[f]+(f===S.faction?' · aktuell':'')+'</span><span style="display:flex;gap:10px;align-items:center">'+(x ? money(S.basis==='min'?x[0]:x[1]) : '–')+trendHtml(dev(id, f))+'</span></div>';
     }).join('') + '</div><p class="hint">Allianz und Horde handeln nur über Blackwater miteinander (höhere Gebühr).</p>';
-    var uses = RECIPES.filter(function(rc){ return rc.out === id || rc.mats.some(function(m){ return m[0] === id; }); });
+    var uses = RECIPES.filter(function(rc){ return rc.out === id || rc.mats.some(function(m){ return m[0] === id; }); }).slice(0, 30);
     if (uses.length) h += '<h2 class="sec">Rezepte</h2><div class="box">' + uses.map(function(rc){
-      return '<button type="button" class="line" data-open="r:'+rc.out+'">'+iconHtml(rc.out,'sm')+'<span style="flex:1">'+(rc.out===id?'Hergestellt: ':'Verwendet in: ')+name(rc.out)+'</span><span class="meta">›</span></button>';
+      return '<button type="button" class="line" data-open="r:'+rc.id+'">'+iconHtml(rc.out,'sm')+'<span style="flex:1">'+(rc.out===id?'Hergestellt: ':'Verwendet in: ')+esc(name(rc.out))+' <span class="meta">'+rc.prof+'</span></span><span class="meta">›</span></button>';
     }).join('') + '</div>';
     return h;
   }
@@ -633,25 +666,55 @@
       if (D && D.i[id]) D.i[id].forEach(function(v, k){ var y = long ? (v && v[1]) : v; if (y != null) pts.push([long ? Date.parse(D.t[k]+'T12:00:00Z') : D.t[k], y]); });
       if (pts.length < 2) { box.innerHTML = '<span class="hint">'+(pts.length ? 'Erster Wert gespeichert ('+dt(pts[0][0])+'). ' : 'Noch keine Werte. ')+'Der Verlauf baut sich mit jedem stündlichen Lauf auf – nach einigen Stunden erscheint hier eine Linie.</span>'; return; }
       box.innerHTML = chartSvg(pts, long);
+      var sv = box.querySelector('svg'), x0 = +sv.dataset.x0, x1 = +sv.dataset.x1;
+      
+      CHART = { pts:pts, long:long, X:function(x){ return 118 + (x - x0) / ((x1 - x0) || 1) * (600 - 118 - 14); }, Y:null };
+      var path = sv.querySelector('path[stroke="var(--gold)"]').getAttribute('d').match(/[ML]([\d.]+) ([\d.]+)/g).map(function(m){ return +m.split(' ')[1]; });
+      CHART.Y = function(y){ var i = pts.findIndex(function(p){ return p[1] === y; }); return path[i]; };
     });
   }
+  function tickTxt(c){ var p = parts(c), o = []; if (p.g) o.push(p.g+'g'); if (p.s) o.push(p.s+'s'); if (p.k || !o.length) o.push(p.k+'k'); return o.join(' '); }
+  function niceStep(span){ var raw = span / 3, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; }
   function chartSvg(pts, long){
-    var W = 600, H = 200, L = 8, R = 8, T = 16, B = 26;
+    var W = 600, H = 300, L = 118, R = 14, T = 18, B = 40;
     var xs = pts.map(function(p){ return p[0]; }), ys = pts.map(function(p){ return p[1]; });
     var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
     var mid = (y0 + y1) / 2, span = Math.max(y1 - y0, mid * 0.2, 4);
-    y0 = Math.max(0, mid - span / 2); y1 = y0 + span;
+    var step = niceStep(span); y0 = Math.max(0, Math.floor((mid - span / 2) / step) * step); y1 = Math.ceil((mid + span / 2) / step) * step; if (y1 <= y0) y1 = y0 + step;
     var X = function(x){ return L + (x - x0) / ((x1 - x0) || 1) * (W - L - R); }, Y = function(y){ return T + (1 - (y - y0) / (y1 - y0)) * (H - T - B); };
     var line = pts.map(function(p, i){ return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join('');
     var area = line + 'L' + X(x1).toFixed(1) + ' ' + (H - B) + 'L' + X(x0).toFixed(1) + ' ' + (H - B) + 'Z';
     var last = pts[pts.length - 1], hi = pts.reduce(function(a, p){ return p[1] > a[1] ? p : a; }), lo = pts.reduce(function(a, p){ return p[1] < a[1] ? p : a; });
     var avg = Math.round(ys.reduce(function(a, b){ return a + b; }, 0) / ys.length);
-    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Preisverlauf Marktpreis" style="display:block">'
-      + '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(avg)+'" y2="'+Y(avg)+'" stroke="var(--line)" stroke-dasharray="4 4"/>'
-      + '<path d="'+area+'" fill="var(--gold)" fill-opacity=".12"/><path d="'+line+'" fill="none" stroke="var(--gold)" stroke-width="2.2" stroke-linejoin="round"/>'
-      + '<circle cx="'+X(last[0])+'" cy="'+Y(last[1])+'" r="4" fill="var(--gold)"/>'
-      + '<text x="'+L+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)">'+dd(x0)+'</text><text x="'+(W-R)+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)" text-anchor="end">'+(long ? dd(x1) : 'jetzt')+'</text></svg>'
-      + '<div class="line" style="padding:8px 0 0;border:0;font-size:13px"><span class="meta">Hoch '+moneyTxt(hi[1])+' · Tief '+moneyTxt(lo[1])+' · Ø '+moneyTxt(avg)+'</span><span class="meta">'+pts.length+(long?' Tage':' Std.')+'</span></div>';
+    var g = '';
+    for (var v = y0; v <= y1 + step / 2; v += step) g += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-8)+'" y="'+(Y(v)+7).toFixed(1)+'" font-size="22" fill="var(--muted)" text-anchor="end">'+tickTxt(Math.round(v))+'</text>';
+    // Datumsmarken: 7 Tage täglich (Mitternacht), 30 Tage wöchentlich
+    var day = 864e5, d0 = new Date(x0); d0.setHours(0,0,0,0); var t = d0.getTime() + day, every = long ? 7 : 1, k = 0, xt = '';
+    for (; t < x1; t += day, k++) { if (k % every) continue; var xx = X(t); if (xx < L + 30 || xx > W - R - 30) continue; xt += '<line x1="'+xx.toFixed(1)+'" x2="'+xx.toFixed(1)+'" y1="'+(H-B)+'" y2="'+(H-B+4)+'" stroke="var(--muted)"/><text x="'+xx.toFixed(1)+'" y="'+(H-10)+'" font-size="22" fill="var(--muted)" text-anchor="middle">'+dd(t)+'</text>'; }
+    var ya = Y(avg), al = 'Ø '+moneyTxt(avg);
+    return '<div class="chartwrap" style="position:relative"><svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Preisverlauf Marktpreis" style="display:block;touch-action:pan-y" data-x0="'+x0+'" data-x1="'+x1+'" data-l="'+L+'" data-r="'+R+'" data-w="'+W+'">'
+      + g + '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(H-B)+'" y2="'+(H-B)+'" stroke="var(--muted)" stroke-width="1"/>' + xt
+      + '<path d="'+area+'" fill="var(--gold)" fill-opacity=".12"/>'
+      + '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+ya.toFixed(1)+'" y2="'+ya.toFixed(1)+'" stroke="var(--soft)" stroke-dasharray="5 4"/>'
+      + '<text x="'+(W-R-4)+'" y="'+(ya - 8).toFixed(1)+'" font-size="22" fill="var(--soft)" text-anchor="end" font-weight="600">'+al+'</text>'
+      + '<path d="'+line+'" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linejoin="round"/>'
+      + '<circle cx="'+X(last[0]).toFixed(1)+'" cy="'+Y(last[1]).toFixed(1)+'" r="4.5" fill="var(--gold)"/>'
+      + '<g id="chartCur" style="display:none"><line id="ccL" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--soft)"/><circle id="ccP" r="6" fill="var(--gold)" stroke="var(--bg)" stroke-width="2"/></g>'
+      + '</svg>'
+      + '<div class="charttip hidden" id="chartTip"></div></div>'
+      + '<div class="line" style="padding:8px 0 0;border:0;font-size:13px"><span class="meta">Hoch '+moneyTxt(hi[1])+' · Tief '+moneyTxt(lo[1])+'</span><span class="meta">'+pts.length+(long?' Tage':' Std.')+'</span></div>';
+  }
+  var CHART = null;
+  function chartPoint(e){
+    var svg = e.target.closest && e.target.closest('#chart svg'); if (!svg || !CHART) return;
+    var rc = svg.getBoundingClientRect(), cx = ((e.touches ? e.touches[0].clientX : e.clientX) - rc.left) / rc.width * 600;
+    var pts = CHART.pts, best = pts[0], bd = 1e9;
+    pts.forEach(function(p){ var d = Math.abs(CHART.X(p[0]) - cx); if (d < bd) { bd = d; best = p; } });
+    var px = CHART.X(best[0]), py = CHART.Y(best[1]);
+    $('chartCur').style.display = ''; $('ccL').setAttribute('x1', px); $('ccL').setAttribute('x2', px); $('ccP').setAttribute('cx', px); $('ccP').setAttribute('cy', py);
+    var tip = $('chartTip'); tip.classList.remove('hidden');
+    tip.innerHTML = '<b>'+moneyTxt(best[1])+'</b><span>'+(CHART.long ? dd(best[0]) : dt(best[0]))+'</span>';
+    var left = px / 600 * rc.width; tip.style.left = Math.max(4, Math.min(rc.width - tip.offsetWidth - 4, left - tip.offsetWidth / 2)) + 'px';
   }
   function shoppingText(){
     var id = sel.slice(2), rc = recipe(id), c = calc(rc), qty = Math.max(1, S.qty[id] || 1);
@@ -718,11 +781,13 @@
     if (t.dataset.mcat) { S.mcat = Number(t.dataset.mcat); save(); render(); return; }
     if (t.dataset.prof) { S.prof = t.dataset.prof; save(); render(); return; }
     if (t.id === 'onlyProfit') { S.onlyProfit = !S.onlyProfit; save(); render(); return; }
-    if (t.hasAttribute('data-reset')) { Q[S.tab] = ''; if (S.tab === 'rezepte') { S.prof = 'Alle'; S.onlyProfit = false; } if (S.tab === 'markt') S.mcat = -1; save(); render(); return; }
+    if (t.id === 'onlyAH') { S.onlyAH = !S.onlyAH; save(); render(); return; }
+    if (t.hasAttribute('data-reset')) { Q[S.tab] = ''; if (S.tab === 'rezepte') { S.prof = 'Alle'; S.onlyProfit = false; S.onlyAH = false; S.skillMode = 'all'; } if (S.tab === 'markt') S.mcat = -1; save(); render(); return; }
     if (t.dataset.qty) { var id = sel.slice(2); S.qty[id] = Math.min(999, Math.max(1, (S.qty[id] || 1) + Number(t.dataset.qty))); save(); renderDetail(); return; }
     if (t.dataset.qset) { S.qty[sel.slice(2)] = Number(t.dataset.qset); save(); renderDetail(); return; }
     if (t.id === 'copyList') { copy(shoppingText()); return; }
     var p = t.parentElement && t.parentElement.id;
+    if (p === 'skillSeg') { S.skillMode = t.dataset.v; save(); render(); return; }
     if (p === 'msort') { S.msort = t.dataset.v; save(); render(); return; }
     if (p === 'themeSeg') { S.theme = t.dataset.v; save(); applyTheme(); render(); return; }
     if (p === 'histSeg') { S.hist = t.dataset.v; save(); renderDetail(); return; }
@@ -730,6 +795,8 @@
     if (t.dataset.fee) { var f = t.dataset.fee.split(','); S[f[0]] = Math.max(0, Math.min(30, S[f[0]] + Number(f[1]))); save(); render(); return; }
     if (t.id === 'resetBtn') { var fav = S.fav; S = Object.assign({}, DEFAULTS, { tab:'einstellungen', fav:fav, skills:{}, qty:{} }); save(); applyTheme(); render(); toast('Einstellungen zurückgesetzt (Merkliste bleibt)'); return; }
   });
+  document.addEventListener('pointerdown', chartPoint);
+  document.addEventListener('pointermove', function(e){ if (e.buttons || e.pointerType === 'mouse') chartPoint(e); });
   document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') $('sheet').innerHTML = ''; });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.open) { openDetail(e.target.dataset.open); return; }
@@ -747,7 +814,7 @@
     if (e.target.dataset && e.target.dataset.skill) {
       var v = parseInt(e.target.value, 10);
       if (v > 0) S.skills[e.target.dataset.skill] = Math.min(300, v); else delete S.skills[e.target.dataset.skill];
-      save(); return;
+      save(); if (S.tab === 'rezepte') renderList(); return;
     }
     if (e.target.id === 'qty') { var v2 = parseInt(e.target.value, 10); if (v2 > 0) { S.qty[sel.slice(2)] = Math.min(999, v2); save(); } }
   });
@@ -757,7 +824,7 @@
   });
   // Wischen im Detail
   var x0 = null, y0 = 0;
-  $('pane').addEventListener('touchstart', function(e){ if (e.target.closest('input,.stepper,.quick')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive:true });
+  $('pane').addEventListener('touchstart', function(e){ if (e.target.closest('input,.stepper,.quick,#chart')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive:true });
   $('pane').addEventListener('touchend', function(e){
     if (x0 === null) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
@@ -766,8 +833,10 @@
   $('list').innerHTML = '<div class="empty">Lade Preise …</div>';
   Promise.all([
     fetch('./items.json').then(function(r){ return r.json(); }),
-    fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }),
+    fetch(DATA+'recipes.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
   ]).then(function(res){
+    setRecipes(res[2]);
     CATS = res[0].cats; ICONS = res[0].icons; ITEMS = res[0].items;
     var L = res[1]; SCANNED = L.scanned || {}; SOURCE = L.source || ''; SNAP = { A:L.A || {}, H:L.H || {}, N:L.N || {} };
     if (!location.hash) S.tab = 'markt';
