@@ -37,14 +37,6 @@ jobs:
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
         run: node update.js out
 
-      - name: Rezept-Quellen testen
-        if: github.event_name == 'workflow_dispatch'
-        continue-on-error: true
-        env:
-          BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
-          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
-        run: node probe.js out
-
       - name: Daten-Branch veroeffentlichen
         run: |
           cd out
