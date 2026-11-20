@@ -142,6 +142,24 @@ for (const [f, h] of Object.entries(prices)) {
 writeJson(path.join(OUT, 'latest.json'), latest);
 log(`Preise gespeichert (Quelle: ${source}).`, latestOld?.scanned?.A === latest.scanned.A ? 'Kein neuer Scan.' : '');
 
+// ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“): Rezepte-Datei für die Forever-Fertigkeitswerte, täglich prüfen
+{
+  const dir = path.join(OUT, 'fdb'), mf = path.join(dir, 'Recipes.lua');
+  let age = Infinity; try { age = Date.now() - fs.statSync(mf).mtimeMs; } catch {}
+  if (age > 864e5) {
+    try {
+      const m = await (await fetch('https://foreverdb.net/downloads/addon-manifest.json')).json();
+      writeJson(path.join(dir, 'manifest.json'), m);
+      const f = (m.data?.files || []).find(x => /Recipes\.lua$/.test(x.path));
+      if (!f) throw new Error('Recipes.lua nicht im Manifest');
+      const r = await fetch(new URL(f.url, 'https://foreverdb.net/').href);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      fs.writeFileSync(mf, Buffer.from(await r.arrayBuffer()));
+      log('ForeverDB Recipes.lua geladen:', fs.statSync(mf).size, 'Bytes');
+    } catch (e) { log('ForeverDB-Rezepte nicht geladen:', e.message); }
+  }
+}
+
 // ---------- Rezepte aller Berufe (wöchentlich) ----------
 // recipes.json: { updated, profs: { id: name }, items: { id: name }, list: [[rezeptId, berufId, kategorie, ausItem, menge, [[item, anzahl], …], fertigkeit|null]] }
 const RECIPE_MAX_AGE = 7 * 864e5;
@@ -183,26 +201,20 @@ if (token) {
     try { rec = await buildRecipes(); writeJson(file, rec); }
     catch (e) { log('Rezepte nicht aktualisiert:', e.message); }
   }
+  // Forever-Fertigkeitswerte aus ForeverDB (fdb/Recipes.lua, ausgabe-Item → kleinste benötigte Fertigkeit)
+  if (rec) {
+    try {
+      const lua = fs.readFileSync(path.join(OUT, 'fdb', 'Recipes.lua'), 'utf8');
+      const sk = {}, re = /\{(\d+),"(?:[^"\\]|\\.)*",(\d+),\d+,\d+,\d+,(\d+),/g; let m;
+      while ((m = re.exec(lua))) { const it = m[3], v = +m[2]; if (sk[it] == null || v < sk[it]) sk[it] = v; }
+      let hit = 0;
+      for (const r of rec.list) { if (sk[r[3]] != null) { r[6] = sk[r[3]]; r[7] = 'fdb'; hit++; } else r[7] = r[6] != null ? 'classic' : null; }
+      rec.skillSource = 'ForeverDB'; writeJson(file, rec);
+      log(`Fertigkeit aus ForeverDB: ${hit} von ${rec.list.length} Rezepten`);
+    } catch (e) { log('ForeverDB-Fertigkeit nicht übernommen:', e.message); }
+  }
   if (rec) for (const r of rec.list) { RECIPE_IDS.add(r[3]); for (const m of r[5]) RECIPE_IDS.add(m[0]); }
 }
-// ForeverDB-Addon-Daten (GPL-3.0, „Data from ForeverDB.net“): Rezepte-Datei für die Forever-Fertigkeitswerte, täglich prüfen
-{
-  const dir = path.join(OUT, 'fdb'), mf = path.join(dir, 'Recipes.lua');
-  let age = Infinity; try { age = Date.now() - fs.statSync(mf).mtimeMs; } catch {}
-  if (age > 864e5) {
-    try {
-      const m = await (await fetch('https://foreverdb.net/downloads/addon-manifest.json')).json();
-      writeJson(path.join(dir, 'manifest.json'), m);
-      const f = (m.data?.files || []).find(x => /Recipes\.lua$/.test(x.path));
-      if (!f) throw new Error('Recipes.lua nicht im Manifest');
-      const r = await fetch(new URL(f.url, 'https://foreverdb.net/').href);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      fs.writeFileSync(mf, Buffer.from(await r.arrayBuffer()));
-      log('ForeverDB Recipes.lua geladen:', fs.statSync(mf).size, 'Bytes');
-    } catch (e) { log('ForeverDB-Rezepte nicht geladen:', e.message); }
-  }
-}
-
 // ---------- Deutsche Namen und Icons (schrittweise) ----------
 // names.json: { id: [name, qualität 0–5, iconUrl, klasse, unterklasse] }, miss.json: { id: zeitpunkt }
 const QUAL = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 5, HEIRLOOM: 5 };

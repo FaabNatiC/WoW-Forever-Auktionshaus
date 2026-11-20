@@ -6,7 +6,8 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 
 ## Funktionen
 
-- **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
+- **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt, Filter-Fenster (ab 5 Auktionen, Qualität, unter/über Ø, nur Items aus meinen Berufen)
+- **Einheitlicher Aufbau** in Auktionshaus, Rezepten und Merkliste: Suche und Fraktion in einer Zeile, Chips, Filterzeile, Sortierung über der Liste
 - **Rezepte:** alle Forever-Rezepte aller Berufe (Blizzard-API, wöchentlich), Gruppen (Veredeln, Rüstung, Waffen, Verbrauchbar, Taschen & Zubehör, Sonstiges), Filter-Fenster mit Beruf, Kategorie wie im Spiel, Fertigkeit, „im AH“, „profitabel“ und „ab 5 Auktionen“
 - **Sortierung** direkt über jeder Liste (Rezepte: Gewinn, Marge, Angebot, Fertigkeit, Name · AH: Angebot, Preis, Abweichung vom Ø, Name), erneutes Tippen dreht die Richtung um, Händlerpreise für Materialien
 - **Meine Berufe:** Berufe in den Einstellungen ein-/ausblenden, Fertigkeit je Beruf
@@ -16,7 +17,8 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 - **Deutsche Forever-Namen und Icons** direkt aus der Blizzard-API (auch für neue Forever-Items)
 - **Item-Detail:** Zurück-Knopf, Position („3 von 120“), Vorheriges/Nächstes, Wischen zum Blättern
 - **Update-Hinweis:** Banner bei neuer App-Version, danach „Was ist neu“ (auch unter Einstellungen)
-- **App-Logo** für den Home-Bildschirm (Teilen → Zum Home-Bildschirm)
+- **App-Logo** für den Home-Bildschirm (Teilen → Zum Home-Bildschirm), **Teilen-Knopf** in den Einstellungen
+- **Offline-Start:** öffnet auch ohne Netz mit dem letzten Preisstand (`sw.js`)
 - **Merkliste**, Hell/Dunkel, zweispaltig am PC, Item-Icons
 
 ## Aufbau
@@ -24,6 +26,7 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 | Datei | Zweck |
 |---|---|
 | `index.html` | die App |
+| `sw.js` | Offline-Start (erst Netz, sonst letzter gespeicherter Stand) |
 | `version.json` | aktuelle App-Version – bei jedem Update erhöhen, sonst erscheint kein Hinweis |
 | `manifest.json`, `icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App-Name und Logo |
 | `classic.json` | Fertigkeitswerte und Händlerpreise aus Classic (wow-classic-items) als Ergänzung zu Blizzard |

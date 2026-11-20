@@ -169,6 +169,7 @@
   .hidden{display:none !important}
   .row.dim{opacity:.55}
   .chip[aria-pressed="true"] .meta{color:inherit;opacity:.8}
+  .chip[aria-pressed="true"] span[class^="q"]{color:inherit}
   .fsum{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px;color:var(--soft)}
   .fsum span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tools .search{flex:1;min-width:0}
@@ -280,8 +281,13 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.9.4';
+  var APP_VERSION = '0.9.5';
   var CHANGES = {
+    '0.9.5': ['Auktionshaus, Rezepte und Merkliste sind gleich aufgebaut: Suche und Fraktion in einer Zeile, Chips, Filterzeile, Sortierung',
+              'Filter-Fenster jetzt auch im Auktionshaus: ab 5 Auktionen, Qualität, unter/über Ø, nur Items aus meinen Berufen',
+              'Teilen-Knopf in den Einstellungen',
+              'Offline-Start: die App öffnet auch ohne Netz mit dem letzten Preisstand',
+              'Echte Forever-Fertigkeitswerte, sobald der Job mit der neuen update.js gelaufen ist'],
     '0.9.4': ['Untere Leiste bleibt beim Scrollen am unteren Rand (iPhone)',
               'Oben unter der Uhrzeit läuft die Liste nicht mehr durch'],
     '0.9.3': ['Sortierung direkt über der Liste: Knopf rechts, z. B. „↓ Gewinn“',
@@ -337,7 +343,7 @@
   function credit(){ return '<p class="credit">AH-Daten: '+(/^forever-prices/.test(SOURCE) ? '<a href="https://github.com/mkborik-cloud/forever-prices">forever-prices</a> (Fallback)' : 'Blizzard-API')+' · Rezepte: Blizzard-API · Fertigkeit: <a href="https://foreverdb.net">Data from ForeverDB.net</a> · Namen/Icons: Blizzard-API und <a href="https://github.com/nexus-devs/wow-classic-items">wow-classic-items</a> (MIT), Grafiken © Blizzard · Forever AH '+APP_VERSION+'</p>'; }
 
   // ---------- Zustand ----------
-  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', sortAsc:false, onlyProfit:false, msort:'volume', msortAsc:false, mcat:-1, theme:'auto', skillMode:'all', onlyAH:true, minAuc:true, group:'Alle', rcat:'', hiddenProfs:['Angeln','Kräuterkunde','Kürschnerei'],
+  var DEFAULTS = { tab:'markt', faction:'A', prof:'Alle', sort:'profit', sortAsc:false, onlyProfit:false, msort:'volume', msortAsc:false, mcat:-1, theme:'auto', mMin5:false, mQual:[], mDev:'', mMine:false, skillMode:'all', onlyAH:true, minAuc:true, group:'Alle', rcat:'', hiddenProfs:['Angeln','Kräuterkunde','Kürschnerei'],
                    basis:'market', feeF:5, feeN:15, skills:{}, fav:[], qty:{} };
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem('goldapp-gh') || '{}')); } catch(e){}
@@ -449,6 +455,7 @@
   function starBtn(k){ var on = isFav(k); return '<button type="button" class="star" data-fav="'+k+'" aria-pressed="'+on+'" aria-label="'+(on ? 'Von Merkliste entfernen' : 'Merken')+'">'+STAR.replace('__F__', on ? 'currentColor' : 'none')+'</button>'; }
   function fresh(){
     var t = SCANNED[S.faction]; if (!t) return '<span class="fresh"><span class="dot" style="background:var(--loss)"></span>Keine Daten geladen</span>';
+    if (!navigator.onLine) return '<span class="fresh"><span class="dot" style="background:var(--loss)"></span>Offline · letzter Stand '+dt(t)+'</span>';
     var h = (Date.now() - t) / 36e5, col = h < 2 ? 'var(--up)' : h < 12 ? 'var(--gold)' : 'var(--loss)';
     var ago = h < 1 ? 'vor ' + Math.max(1, Math.round(h*60)) + ' Min.' : h < 48 ? 'vor ' + Math.round(h) + ' Std.' : 'vor ' + Math.round(h/24) + ' Tagen';
     return '<span class="fresh"><span class="dot" style="background:'+col+'"></span>Stand '+dt(t)+' · '+ago+'</span>';
@@ -463,6 +470,9 @@
   var ctx = []; // aktuelle Liste für Vor/Zurück: ['r:1710','i:2772', …]
   var sel = null;
 
+  function searchRow(ph){ return '<div class="tools">'+searchBox(ph)+factionSel()+'</div>'; }
+  function factionSel(){ return '<select id="factionSel" aria-label="Fraktion">'+['A','H','N'].map(function(f){ return '<option value="'+f+'"'+(f===S.faction?' selected':'')+'>'+FNAME[f]+'</option>'; }).join('')+'</select>'; }
+  function filterRow(sum, cnt){ return '<div class="fsum"><span>'+esc(sum)+'</span><button type="button" class="favbtn" id="filterBtn"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter'+(cnt ? ' '+cnt : '')+'</button></div>'; }
   function factionSeg(){
     return '<div class="seg" role="group" aria-label="Fraktion">' + ['A','H','N'].map(function(f){ return '<button type="button" data-faction="'+f+'" aria-pressed="'+(f===S.faction)+'">'+FNAME[f]+'</button>'; }).join('') + '</div>';
   }
@@ -518,18 +528,19 @@
       var d = recipeRows(), best = d.profitable.slice().sort(function(a,b){ return b.c.profit - a.c.profit; })[0];
       h = '<div class="toprow"><div><h1>Rezepte</h1>'+fresh()+'</div></div>'
         + '<div class="stats"><span><b>'+n(d.profitable.length)+'</b> von '+n(d.total)+' profitabel'+(best ? ' · bestes: <b>'+esc(name(best.r.out))+'</b> '+money(best.c.profit,true) : '')+'</span></div>'
-        + '<div class="tools">'+searchBox('Suchen …')+'<select id="factionSel" aria-label="Fraktion">'+['A','H','N'].map(function(f){ return '<option value="'+f+'"'+(f===S.faction?' selected':'')+'>'+FNAME[f]+'</option>'; }).join('')+'</select></div>'
+        + searchRow('Rezept suchen …')
         + '<div class="chips" role="group" aria-label="Gruppe">'+GROUPS.map(function(g){ return '<button type="button" class="chip" data-group="'+g+'" aria-pressed="'+(g===S.group)+'">'+g+'</button>'; }).join('')+'</div>'
-        + '<div class="fsum"><span>'+esc(filterSummary())+'</span><button type="button" class="favbtn" id="filterBtn"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter'+(filterCount() ? ' '+filterCount() : '')+'</button></div>';
+        + filterRow(filterSummary(), filterCount());
     } else if (S.tab === 'markt') {
       var ids = Object.keys(SNAP[S.faction]).filter(liquid), up = ids.filter(function(id){ return dev(id) > 0.05; }).length, dn = ids.filter(function(id){ return dev(id) < -0.05; }).length;
       h = '<div class="toprow"><div class="brand">'+LOGO+'<div><h1>Forever AH</h1>'+fresh()+'</div></div></div>'
         + '<div class="stats"><span><b>'+n(Object.keys(SNAP[S.faction]).length)+'</b> Items im AH · <b class="trend down">▼ '+dn+'</b> unter · <b class="trend up">▲ '+up+'</b> über dem 7-Tage-Schnitt</span></div>'
-        + factionSeg() + searchBox('Item suchen (deutsch/englisch oder ID) …')
-        + '<div class="chips" role="group" aria-label="Kategorie">'+[-1].concat(CAT_ORDER).map(function(c){ return '<button type="button" class="chip" data-mcat="'+c+'" aria-pressed="'+(S.mcat===c)+'">'+(c<0?'Alle':CATS[c])+'</button>'; }).join('')+'</div>';
+        + searchRow('Item suchen …')
+        + '<div class="chips" role="group" aria-label="Kategorie">'+[-1].concat(CAT_ORDER).map(function(c){ return '<button type="button" class="chip" data-mcat="'+c+'" aria-pressed="'+(S.mcat===c)+'">'+(c<0?'Alle':CATS[c])+'</button>'; }).join('')+'</div>'
+        + filterRow(mFilterSummary(), mFilterCount());
     } else if (S.tab === 'merkliste') {
       h = '<div class="toprow"><div><h1>Merkliste</h1>'+fresh()+'</div></div>'
-        + '<div class="stats"><span><b>'+S.fav.length+'</b> gemerkte Einträge</span></div>' + factionSeg();
+        + '<div class="tools"><div class="stats" style="flex:1"><span><b>'+S.fav.length+'</b> gemerkte Einträge</span></div>'+factionSel()+'</div>';
     } else {
       h = '<div class="toprow"><div><h1>Einstellungen</h1><p class="sub">Normal (PvE) · EU</p></div></div>';
     }
@@ -542,7 +553,11 @@
     var q = Q.markt.trim().toLowerCase();
     var ids = Object.keys(SNAP[S.faction]).filter(function(id){
       if (S.mcat >= 0 && catOf(id) !== S.mcat) return false;
-      if (S.msort === 'dev' && !liquid(id)) return false;
+      if ((S.msort === 'dev' || S.mMin5 || S.mDev) && !liquid(id)) return false;
+      if (S.mQual.length && S.mQual.indexOf(qual(id)) < 0) return false;
+      if (S.mDev === 'below' && !(dev(id) < -0.05)) return false;
+      if (S.mDev === 'above' && !(dev(id) > 0.05)) return false;
+      if (S.mMine && !mineSet()[id]) return false;
       return !q || name(id).toLowerCase().indexOf(q) >= 0 || enName(id).toLowerCase().indexOf(q) >= 0 || id === q;
     });
     var vol = function(id){ var r = row(id); return r ? r[4] : 0; };
@@ -576,7 +591,7 @@
       ctx = d.rows.map(function(x){ return 'r:'+x.r.id; });
     } else if (S.tab === 'markt') {
       var ids = marketIds();
-      lh = '<span>'+n(ids.length)+' Items'+(S.msort==='dev' ? ' · ab 5 Auktionen' : '')+'</span>'+sortBtn();
+      lh = '<span>'+n(ids.length)+' Items</span>'+sortBtn();
       shown = PAGE;
       html = ids.length ? ids.slice(0, shown).map(itemRow).join('') + (ids.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Kein Item gefunden.');
       ctx = ids.map(function(id){ return 'i:'+id; });
@@ -621,6 +636,7 @@
       + '<div class="line"><span>Rezepte</span><span>'+n(RECIPES.length)+' · '+esc(RSRC)+(RUPD ? ' · '+dt(RUPD).slice(0,10) : '')+'</span></div></div>'
       + '<p class="hint">Annahme: Normal = Häuser 111 (Allianz), 114 (Horde), 117 (Blackwater).</p>'
       + '<h2 class="sec">App</h2><div class="box"><div class="line"><span>Version</span><span class="num">'+APP_VERSION+'</span></div>'
+      + '<button type="button" class="line" id="shareBtn"><span>App teilen</span><span class="meta">Link senden ›</span></button>'
       + '<button type="button" class="line" id="newsBtn"><span>Was ist neu?</span><span class="meta">›</span></button>'
       + '<button type="button" class="line" id="checkBtn"><span>Nach Update suchen</span><span class="meta">›</span></button></div>'
       + '<button type="button" class="btn" id="resetBtn" style="align-self:flex-start">Alles auf Standard zurücksetzen</button>' + credit();
@@ -652,6 +668,33 @@
     if (S.onlyAH) p.push('im AH'); if (S.onlyProfit) p.push('profitabel'); if (S.minAuc) p.push('ab 5 Auk.');
     return p.join(' · ');
   }
+  var QNAMES = [[0,'Grau'],[1,'Weiß'],[2,'Grün'],[3,'Blau'],[4,'Lila'],[5,'Orange']];
+  var MINE = null, MINEKEY = '';
+  function mineSet(){
+    var key = (S.hiddenProfs||[]).join(',') + RECIPES.length; if (MINE && key === MINEKEY) return MINE;
+    MINE = {}; MINEKEY = key;
+    RECIPES.forEach(function(r){ if (!profOn(r.prof) || isCamp(r)) return; MINE[r.out] = 1; r.mats.forEach(function(m){ MINE[m[0]] = 1; }); });
+    return MINE;
+  }
+  function mFilterCount(){ return (S.mMin5 ? 1 : 0) + (S.mQual.length ? 1 : 0) + (S.mDev ? 1 : 0) + (S.mMine ? 1 : 0); }
+  function mFilterSummary(){
+    var p = [S.mcat < 0 ? 'Alle Kategorien' : CATS[S.mcat]];
+    if (S.mMin5 || S.mDev) p.push('ab 5 Auk.');
+    if (S.mQual.length) p.push(QNAMES.filter(function(q){ return S.mQual.indexOf(q[0]) >= 0; }).map(function(q){ return q[1]; }).join('/'));
+    if (S.mDev) p.push(S.mDev === 'below' ? 'unter Ø' : 'über Ø');
+    if (S.mMine) p.push('meine Berufe');
+    return p.join(' · ');
+  }
+  function mFilterSheet(){
+    var cnt = marketIds().length;
+    return '<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filter">'
+      + '<div class="sheethead"><h2>Filter</h2><button type="button" class="linkbtn" id="fReset">Zurücksetzen</button></div>'
+      + '<div class="fgroup"><span class="flabel">Angebot</span><div class="wrapchips"><button type="button" class="chip" id="mMin5" aria-pressed="'+S.mMin5+'">ab 5 Auktionen</button></div></div>'
+      + '<div class="fgroup"><span class="flabel">Qualität</span><div class="wrapchips">'+QNAMES.map(function(q){ return '<button type="button" class="chip" data-mq="'+q[0]+'" aria-pressed="'+(S.mQual.indexOf(q[0]) >= 0)+'"><span class="q'+q[0]+'">'+q[1]+'</span></button>'; }).join('')+'</div><p class="hint">Keine Auswahl = alle Qualitäten.</p></div>'
+      + '<div class="fgroup"><span class="flabel">Preis ggü. 7-Tage-Schnitt</span><div class="seg" role="group" id="mDevSeg">'+[['','Alle'],['below','Unter Ø'],['above','Über Ø']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.mDev===o[0])+'">'+o[1]+'</button>'; }).join('')+'</div></div>'
+      + '<div class="fgroup"><span class="flabel">Berufe</span><div class="wrapchips"><button type="button" class="chip" id="mMine" aria-pressed="'+S.mMine+'">Nur Items aus meinen Berufen</button><button type="button" class="chip" id="fProfs">Berufe ✎</button></div><p class="hint">Materialien und Ergebnisse der Berufe, die in den Einstellungen eingeschaltet sind.</p></div>'
+      + '<button type="button" class="btn primary" id="sheetOk">'+n(cnt)+' Items anzeigen</button></div></div>';
+  }
   var filterOpen = false;
   function filterSheet(){
     var cats = S.prof === 'Alle' ? [] : Object.keys(RECIPES.reduce(function(o, r){ if (r.prof === S.prof && !isCamp(r)) o[r.cat] = 1; return o; }, {})).sort(function(a,b){ return a.localeCompare(b, 'de'); });
@@ -668,9 +711,17 @@
       + '<button type="button" class="chip" id="onlyAH" aria-pressed="'+S.onlyAH+'">im AH</button><button type="button" class="chip" id="onlyProfit" aria-pressed="'+S.onlyProfit+'">profitabel</button><button type="button" class="chip" id="minAuc" aria-pressed="'+S.minAuc+'">ab 5 Auktionen</button></div></div>'
       + '<button type="button" class="btn primary" id="sheetOk">'+n(cnt)+(cnt===1?' Rezept':' Rezepte')+' anzeigen</button></div></div>';
   }
-  function openFilter(){ filterOpen = true; $('sheet').innerHTML = filterSheet(); }
-  function refreshFilter(){ var sc = document.querySelector('.sheet'), y = sc ? sc.scrollTop : 0; $('sheet').innerHTML = filterSheet(); var s2 = document.querySelector('.sheet'); if (s2) s2.scrollTop = y; renderHead(); renderList(); }
+  function anySheet(){ return S.tab === 'markt' ? mFilterSheet() : filterSheet(); }
+  function openFilter(){ filterOpen = true; $('sheet').innerHTML = anySheet(); }
+  function refreshFilter(){ var sc = document.querySelector('.sheet'), y = sc ? sc.scrollTop : 0; $('sheet').innerHTML = anySheet(); var s2 = document.querySelector('.sheet'); if (s2) s2.scrollTop = y; renderHead(); renderList(); }
   function closeSheet(){ $('sheet').innerHTML = ''; filterOpen = false; }
+  var APP_URL = 'https://faabnatic.github.io/WoW-Forever-Auktionshaus/';
+  function shareApp(){
+    var data = { title:'Forever AH', text:'Forever AH – AH-Preise, Preisverlauf und Rezeptgewinne für WoW Forever (EU, Normal).', url:APP_URL };
+    if (navigator.share) { navigator.share(data).catch(function(){}); return; }
+    copyText(APP_URL, 'Link kopiert');
+  }
+  function copyText(t, msg){ try { navigator.clipboard.writeText(t).then(function(){ toast(msg); }, function(){ toast(t); }); } catch(e){ toast(t); } }
   function render(){ renderHead(); renderList(); if (sel) renderDetail(); }
 
   // ---------- Details ----------
@@ -883,6 +934,11 @@
     if (t.id === 'filterBtn') { openFilter(); return; }
     if (t.id === 'sortBtn') { var mm = $('sortMenu'); if (mm) mm.remove(); else $('listhead').insertAdjacentHTML('beforeend', sortMenu()); return; }
     if (t.dataset.sortv) { setSort(t.dataset.sortv); return; }
+    if (t.id === 'fReset' && S.tab === 'markt') { S.mMin5 = false; S.mQual = []; S.mDev = ''; S.mMine = false; save(); refreshFilter(); return; }
+    if (t.id === 'mMin5') { S.mMin5 = !S.mMin5; save(); refreshFilter(); return; }
+    if (t.id === 'mMine') { S.mMine = !S.mMine; save(); refreshFilter(); return; }
+    if (t.dataset.mq != null) { var qv = Number(t.dataset.mq), qa = S.mQual = S.mQual.slice(), qi = qa.indexOf(qv); if (qi >= 0) qa.splice(qi, 1); else qa.push(qv); save(); refreshFilter(); return; }
+    if (t.id === 'shareBtn') { shareApp(); return; }
     if (t.id === 'fReset') { S.prof = 'Alle'; S.rcat = ''; S.skillMode = 'all'; S.onlyAH = true; S.onlyProfit = false; S.minAuc = true; save(); refreshFilter(); return; }
     if (t.id === 'fProfs') { closeSheet(); location.hash = 'einstellungen'; setTimeout(function(){ var el = $('berufe'); if (el) el.scrollIntoView(); }, 50); return; }
     if (t.dataset.fprof) { S.prof = t.dataset.fprof; S.rcat = ''; save(); refreshFilter(); return; }
@@ -905,6 +961,7 @@
     if (t.dataset.qset) { S.qty[sel.slice(2)] = Number(t.dataset.qset); save(); renderDetail(); return; }
     if (t.id === 'copyList') { copy(shoppingText()); return; }
     var p = t.parentElement && t.parentElement.id;
+    if (p === 'mDevSeg') { S.mDev = t.dataset.v; save(); refreshFilter(); return; }
     if (p === 'skillSeg') { S.skillMode = t.dataset.v; save(); filterOpen ? refreshFilter() : render(); return; }
     if (p === 'msort') { S.msort = t.dataset.v; save(); render(); return; }
     if (p === 'themeSeg') { S.theme = t.dataset.v; save(); applyTheme(); render(); return; }
@@ -969,6 +1026,7 @@
     $('head').innerHTML = '<div class="brand">'+LOGO+'<h1>Forever AH</h1></div>';
     $('list').innerHTML = '<div class="empty">Preise konnten nicht geladen werden.<br>Läuft der Job schon (Reiter „Actions“)?<button type="button" class="btn" onclick="location.reload()">Neu laden</button></div>';
   });
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(function(){});
   // ---------- App-Version ----------
   function vnum(v){ var p = String(v||'0').split('.').map(Number); while (p.length < 3) p.push(0); return p.reduce(function(a, x){ return a * 1000 + (x||0); }, 0); }
   function checkVersion(manual){
@@ -989,6 +1047,7 @@
     $('sheet').innerHTML = newsHtml(APP_VERSION);
   }
 
+  window.addEventListener('online', function(){ renderHead(); }); window.addEventListener('offline', function(){ renderHead(); });
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState === 'visible') checkVersion();
     if (document.visibilityState !== 'visible' || !SCANNED.A) return;
