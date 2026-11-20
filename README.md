@@ -1,16 +1,19 @@
-# Gold-Rechner · WoW Forever
+# Forever AH · WoW Forever
 
-Private Web-App (PWA) für WoW Forever: Gewinn pro Craft für Forever-Rezepte, alle Auktionshaus-Preise und Preisverlauf. Markt: **Normal (PvE), EU**, Allianz, Horde und Blackwater.
+Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlauf, dazu Gewinn pro Craft für Forever-Rezepte. Markt: **Normal (PvE), EU**, Allianz, Horde und Blackwater.
 
 **App:** https://faabnatic.github.io/WoW-Forever-Auktionshaus/
 
 ## Funktionen
 
+- **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
 - **Rezepte:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
 - **Mengenrechner:** Gesamtkosten und Gewinn für X Crafts, Einkaufsliste zum Kopieren, Warnung bei zu wenig Material im AH
-- **Auktionshaus:** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
 - **Preisverlauf:** 7 Tage stündlich, 30 Tage täglich (baut sich ab dem ersten Lauf auf)
 - **Deutsche Forever-Namen und Icons** direkt aus der Blizzard-API (auch für neue Forever-Items)
+- **Item-Detail:** Zurück-Knopf, Position („3 von 120“), Vorheriges/Nächstes, Wischen zum Blättern
+- **Update-Hinweis:** Banner bei neuer App-Version, danach „Was ist neu“ (auch unter Einstellungen)
+- **App-Logo** für den Home-Bildschirm (Teilen → Zum Home-Bildschirm)
 - **Merkliste**, Hell/Dunkel, zweispaltig am PC, Item-Icons
 
 ## Aufbau
@@ -18,6 +21,8 @@ Private Web-App (PWA) für WoW Forever: Gewinn pro Craft für Forever-Rezepte, a
 | Datei | Zweck |
 |---|---|
 | `index.html` | die App |
+| `version.json` | aktuelle App-Version – bei jedem Update erhöhen, sonst erscheint kein Hinweis |
+| `manifest.json`, `icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App-Name und Logo |
 | `items.json` | Grunddaten: englische Namen, Kategorien, Icon-Namen |
 | `update.js` | holt Preise und Namen, schreibt den Verlauf |
 | `package.json` | markiert `update.js` als ES-Modul |
@@ -38,7 +43,8 @@ Hinweis: GitHub pausiert geplante Workflows nach 60 Tagen ohne Aktivität im Rep
 ## Datenquellen
 
 - **AH-Preise:** Blizzard-API (Forever, EU). Fällt sie aus, springt [forever-prices](https://github.com/mkborik-cloud/forever-prices) ein. Die genutzte Quelle steht in der App unter Einstellungen.
-- **Item-Namen/Icons:** Blizzard-API (deutsch), je Lauf bis zu 1.500 Items, bis alle da sind
+- **Item-Namen/Icons:** Blizzard-API (deutsch), je Lauf bis zu 3.000 Items, Rezept-Items und viel gehandelte Items zuerst
+- **Auktionshaus (Start):** alle gehandelten Items mit Suche (deutsch/englisch/ID), Kategorien, Vergleich mit dem 7-Tage-Schnitt
 - **Rezepte:** Forever-Client laut [ForeverDB.net](https://foreverdb.net)
 - **Grunddaten:** [wow-classic-items](https://github.com/nexus-devs/wow-classic-items) (MIT), Icon-Grafiken © Blizzard Entertainment
 - Häuser-Zuordnung Normal = 111/114/117 ist eine Annahme

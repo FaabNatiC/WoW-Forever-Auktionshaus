@@ -12,7 +12,7 @@ const RULESET = 2; // Normal
 const HOUSES = { A: 111, H: 114, N: 117 }; // Normal (PvE): Allianz, Horde, Blackwater
 const FALLBACK = 'https://raw.githubusercontent.com/mkborik-cloud/forever-prices/data/prices.lua';
 const SHARDS = 32, HOURS_KEEP = 168, DAYS_KEEP = 30;
-const NAME_BUDGET = 1500;          // neue Item-Namen je Lauf
+const NAME_BUDGET = 3000;          // neue Item-Namen je Lauf
 const RETRY_MISS_MS = 7 * 864e5;   // nicht gefundene Items nach 7 Tagen erneut prüfen
 
 const readJson = (f, fb) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fb; } };
@@ -144,12 +144,16 @@ log(`Preise gespeichert (Quelle: ${source}).`, latestOld?.scanned?.A === latest.
 
 // ---------- Deutsche Namen und Icons (schrittweise) ----------
 // names.json: { id: [name, qualität 0–5, iconUrl, klasse, unterklasse] }, miss.json: { id: zeitpunkt }
+const RECIPE_IDS = new Set(['1710','3372','2692','3357','3928','8925','3713','8838','13446','13464','14529','14530','14047','14048','13931','13759','159','3575','2772','3860','3858','12359','10620']);
 const QUAL = { POOR: 0, COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, ARTIFACT: 5, HEIRLOOM: 5 };
 if (token) {
   const names = readJson(path.join(OUT, 'names.json'), {}), miss = readJson(path.join(OUT, 'miss.json'), {});
   const ids = new Set(); for (const f of Object.keys(prices)) for (const id of Object.keys(prices[f].items)) ids.add(id);
+  // Reihenfolge: Rezept-Items zuerst, dann nach Handelsvolumen (Auktionen über alle Fraktionen)
+  const vol = {}; for (const f of Object.keys(prices)) for (const [id, r] of Object.entries(prices[f].items)) vol[id] = (vol[id] || 0) + (r[4] || 0);
+  const prio = id => (RECIPE_IDS.has(id) ? 1e12 : 0) + (vol[id] || 0);
   const todo = [...ids].filter(id => !names[id] && !(miss[id] && Date.now() - miss[id] < RETRY_MISS_MS))
-    .sort((a, b) => +b - +a).slice(0, NAME_BUDGET); // neue Forever-Items (hohe IDs) zuerst
+    .sort((a, b) => prio(b) - prio(a)).slice(0, NAME_BUDGET);
   let ok = 0, nf = 0, err = 0;
   const work = async (id) => {
     try {
