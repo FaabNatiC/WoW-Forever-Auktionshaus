@@ -1,4 +1,8 @@
 {
-  "hinweis": "Charaktere für den Ausrüstungsvergleich. Realm und Name wie im Spiel, z. B. { \"realm\": \"Venoxis\", \"name\": \"Fabian\" }",
-  "chars": []
+  "hinweis": "Charaktere für den Ausrüstungsvergleich. realm \"*\" = alle Forever-Realms durchsuchen. Beispiel: { \"realm\": \"Realmname\", \"name\": \"Charaktername\" }",
+  "chars": [
+    { "realm": "*", "name": "Faabnatic Deadeye" },
+    { "realm": "*", "name": "Faabnatic Bonecrusher" },
+    { "realm": "*", "name": "Faabnatic Bankchar" }
+  ]
 }

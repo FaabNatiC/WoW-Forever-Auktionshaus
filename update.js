@@ -377,28 +377,56 @@ if (token) {
 }
 
 // ---------- Charaktere (chars.json im Repo) ----------
-// out/chars.json: { updated, chars: [{ realm, name, ok, ns, summary: {...}, equip: [{ slot, id, name, q }] , fehler }] }
+// Realm "*" oder leer: alle Forever-Realms (EU) durchsuchen. Bei Namen mit Leerzeichen werden auch die Teile probiert.
+// Gefundene Realms/Namespaces merkt sich out/chars.json, damit die Suche nur einmal nötig ist.
 {
   const cfg = readJson(new URL('./chars.json', import.meta.url), { chars: [] });
-  const list = (cfg.chars || []).filter(c => c.realm && c.name);
+  const list = (cfg.chars || []).filter(c => c.name);
   if (token && list.length) {
     const slug = s => s.toLowerCase().replace(/['’]/g, '').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss').trim().replace(/\s+/g, '-');
+    const prev = readJson(path.join(OUT, 'chars.json'), { chars: [] });
+    const known = Object.fromEntries((prev.chars || []).filter(c => c.ok).map(c => [c.name + '|' + (c.realmCfg || ''), c]));
+    const NS = ['profile-forever-eu', 'profile-classic-eu', 'profile-classic1x-eu'];
+    let realms = null;
+    const allRealms = async () => {
+      if (realms) return realms;
+      realms = [];
+      for (const ns of ['dynamic-forever-eu', 'dynamic-classic-eu', 'dynamic-classic1x-eu']) {
+        try { const r = await bz('/data/wow/realm/index', ns, '&locale=de_DE'); for (const x of r?.realms || []) realms.push({ slug: x.slug, name: x.name, dyn: ns }); } catch {}
+      }
+      writeJson(path.join(OUT, 'realms.json'), realms);
+      log(`Realms gefunden: ${realms.length} (${[...new Set(realms.map(r => r.dyn))].join(', ')})`);
+      return realms;
+    };
+    const tryChar = async (rs, n, nsList) => {
+      for (const ns of nsList) {
+        try {
+          const sum = await bz(`/profile/wow/character/${encodeURIComponent(rs)}/${encodeURIComponent(n.toLowerCase())}`, ns, '&locale=de_DE');
+          if (sum) return { sum, ns };
+        } catch {}
+      }
+      return null;
+    };
     const out = { updated: Date.now(), chars: [] };
     for (const c of list) {
-      const r = slug(c.realm), n = c.name.toLowerCase(), e = { realm: c.realm, name: c.name, ok: false };
-      for (const ns of ['profile-forever-eu', 'profile-classic-eu', 'profile-classic1x-eu']) {
-        try {
-          const sum = await bz(`/profile/wow/character/${encodeURIComponent(r)}/${encodeURIComponent(n)}`, ns, '&locale=de_DE');
-          if (!sum) continue;
-          const eq = await bz(`/profile/wow/character/${encodeURIComponent(r)}/${encodeURIComponent(n)}/equipment`, ns, '&locale=de_DE').catch(() => null);
-          e.ok = true; e.ns = ns;
-          e.summary = { level: sum.level, klasse: sum.character_class?.name, volk: sum.race?.name, fraktion: sum.faction?.name, gilde: sum.guild?.name, realm: sum.realm?.name };
-          e.equip = (eq?.equipped_items || []).map(x => ({ slot: x.slot?.type, platz: x.slot?.name, id: String(x.item?.id), name: x.name, q: QUAL[x.quality?.type] ?? 1 }));
-          if (!fs.existsSync(path.join(OUT, 'chars-beispiel.json'))) writeJson(path.join(OUT, 'chars-beispiel.json'), { sum, eq });
-          break;
-        } catch (err) { e.fehler = (e.fehler ? e.fehler + ' | ' : '') + ns + ': ' + err.message; }
+      const realmCfg = (c.realm || '*').trim(), e = { name: c.name, realmCfg, ok: false };
+      const names = [...new Set([c.name.replace(/\s+/g, ''), ...c.name.split(/\s+/)])].filter(Boolean);
+      let hit = null;
+      const k = known[c.name + '|' + realmCfg];
+      if (k) hit = await tryChar(k.realmSlug, k.charName, [k.ns]).then(r => r && { ...r, rs: k.realmSlug, n: k.charName });
+      if (!hit) {
+        const cands = realmCfg === '*' ? (await allRealms()).map(r => r.slug) : [slug(realmCfg)];
+        outer: for (const rs of [...new Set(cands)]) for (const n of names) { const r = await tryChar(rs, n, NS); if (r) { hit = { ...r, rs, n }; break outer; } }
       }
-      log(`Charakter ${c.name}-${c.realm}: ${e.ok ? `ok (${e.ns}, ${e.equip.length} Teile)` : 'nicht gefunden – ' + (e.fehler || 'keine Daten')}`);
+      if (hit) {
+        const { sum, ns, rs, n } = hit;
+        const eq = await bz(`/profile/wow/character/${encodeURIComponent(rs)}/${encodeURIComponent(n.toLowerCase())}/equipment`, ns, '&locale=de_DE').catch(() => null);
+        Object.assign(e, { ok: true, ns, realmSlug: rs, charName: n,
+          summary: { name: sum.name, level: sum.level, klasse: sum.character_class?.name, volk: sum.race?.name, fraktion: sum.faction?.name, gilde: sum.guild?.name, realm: sum.realm?.name },
+          equip: (eq?.equipped_items || []).map(x => ({ slot: x.slot?.type, platz: x.slot?.name, id: String(x.item?.id), name: x.name, q: QUAL[x.quality?.type] ?? 1 })) });
+        if (!fs.existsSync(path.join(OUT, 'chars-beispiel.json'))) writeJson(path.join(OUT, 'chars-beispiel.json'), { sum, eq });
+      }
+      log(`Charakter ${c.name} (${realmCfg}): ${e.ok ? `gefunden auf ${e.realmSlug} als „${e.charName}“ (${e.ns}), ${e.equip.length} Teile` : 'nicht gefunden'}`);
       out.chars.push(e);
     }
     writeJson(path.join(OUT, 'chars.json'), out);
