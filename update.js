@@ -83,8 +83,8 @@ async function pricesFromBlizzard(old) {
   for (const [f, hid] of Object.entries(HOUSES)) {
     const base = `/data/wow/ruleset/${RULESET}/auctions/${hid}`;
     const prevLm = old?.lm?.[f];
-    let hr = await bzHouse(base, FORCE || !old?.[f] ? null : prevLm);
-    if (hr.same || (hr.lm && hr.lm === prevLm && !FORCE && old?.[f])) { res[f] = { same: true, lm: prevLm, scanned: old.scanned[f], items: old[f] }; log(`Blizzard ${f}/${hid}: unverändert`); continue; }
+    const hr = await bzHouse(base, null);
+    if (hr.lm && hr.lm === prevLm && !FORCE && !STALE && old?.[f]) { res[f] = { same: true, lm: prevLm, scanned: old.scanned[f], items: old[f] }; log(`Blizzard ${f}/${hid}: unverändert (Stand ${prevLm})`); continue; }
     const house = hr.json;
     const comm = await bz(base + '/commodities', 'dynamic-forever-eu').catch(() => null);
     const all = [...(house?.auctions || []), ...(comm?.auctions || [])];
@@ -92,7 +92,7 @@ async function pricesFromBlizzard(old) {
     if (Object.keys(items).length < 300) throw new Error(`Haus ${hid}: nur ${Object.keys(items).length} Items`);
     const t = hr.lm ? Date.parse(hr.lm) : NaN;
     res[f] = { scanned: Number.isFinite(t) ? t : Date.now(), lm: hr.lm, items };
-    log(`Blizzard ${f}/${hid}: ${all.length} Auktionen, ${Object.keys(items).length} Items`);
+    log(`Blizzard ${f}/${hid}: Stand ${hr.lm || '?'} (vorher ${prevLm || '–'}), ${all.length} Auktionen, ${Object.keys(items).length} Items`);
   }
   return res;
 }
@@ -121,15 +121,16 @@ async function pricesFromFallback() {
 token = await getToken().catch(e => { log('Token:', e.message); return null; });
 let prices, source;
 const latestOld = readJson(path.join(OUT, 'latest.json'), null);
+const STALE = !latestOld || Date.now() - (latestOld.updated || 0) > 70 * 60e3;   // Sicherheitsnetz: spätestens stündlich neu holen
 if (token) {
   try { prices = await pricesFromBlizzard(latestOld); source = 'Blizzard-API'; }
   catch (e) { log('Blizzard-AH fehlgeschlagen, nutze Ausweichquelle:', e.message); }
 }
 if (!prices) {
   prices = await pricesFromFallback(); source = 'forever-prices (Blizzard-API)';
-  for (const f of Object.keys(prices)) if (!FORCE && latestOld?.scanned?.[f] === prices[f].scanned && latestOld?.[f]) { prices[f].same = true; prices[f].items = latestOld[f]; }
+  for (const f of Object.keys(prices)) if (!FORCE && !STALE && latestOld?.scanned?.[f] === prices[f].scanned && latestOld?.[f]) { prices[f].same = true; prices[f].items = latestOld[f]; }
 }
-if (Object.values(prices).every(h => h.same) && !FORCE) {
+if (Object.values(prices).every(h => h.same) && !FORCE && !STALE) {
   log('Kein neuer AH-Stand – nichts zu tun.');
   setOutput('changed', 'false');
   process.exit(0);
