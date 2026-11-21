@@ -385,13 +385,13 @@ if (token) {
   if (token && list.length) {
     const slug = s => s.toLowerCase().replace(/['’]/g, '').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss').trim().replace(/\s+/g, '-');
     const prev = readJson(path.join(OUT, 'chars.json'), { chars: [] });
-    const known = Object.fromEntries((prev.chars || []).filter(c => c.ok).map(c => [c.name + '|' + (c.realmCfg || ''), c]));
-    const NS = ['profile-forever-eu', 'profile-classic-eu', 'profile-classic1x-eu'];
+    const known = Object.fromEntries((prev.chars || []).filter(c => c.ok && c.ns === 'profile-forever-eu').map(c => [c.name + '|' + (c.realmCfg || ''), c]));
+    const NS = ['profile-forever-eu'];   // nur Forever – Classic/Era-Treffer wären andere Charaktere mit gleichem Namen
     let realms = null;
     const allRealms = async () => {
       if (realms) return realms;
       realms = [];
-      for (const ns of ['dynamic-forever-eu', 'dynamic-classic-eu', 'dynamic-classic1x-eu']) {
+      for (const ns of ['dynamic-forever-eu']) {
         try { const r = await bz('/data/wow/realm/index', ns, '&locale=de_DE'); for (const x of r?.realms || []) realms.push({ slug: x.slug, name: x.name, dyn: ns }); } catch {}
       }
       writeJson(path.join(OUT, 'realms.json'), realms);
@@ -416,6 +416,7 @@ if (token) {
       if (k) hit = await tryChar(k.realmSlug, k.charName, [k.ns]).then(r => r && { ...r, rs: k.realmSlug, n: k.charName });
       if (!hit) {
         const cands = realmCfg === '*' ? (await allRealms()).map(r => r.slug) : [slug(realmCfg)];
+        if (!cands.length) { e.fehler = 'Blizzard liefert keine Forever-Realms – Charakterdaten für Forever noch nicht verfügbar'; }
         outer: for (const rs of [...new Set(cands)]) for (const n of names) { const r = await tryChar(rs, n, NS); if (r) { hit = { ...r, rs, n }; break outer; } }
       }
       if (hit) {
@@ -424,7 +425,7 @@ if (token) {
         Object.assign(e, { ok: true, ns, realmSlug: rs, charName: n,
           summary: { name: sum.name, level: sum.level, klasse: sum.character_class?.name, volk: sum.race?.name, fraktion: sum.faction?.name, gilde: sum.guild?.name, realm: sum.realm?.name },
           equip: (eq?.equipped_items || []).map(x => ({ slot: x.slot?.type, platz: x.slot?.name, id: String(x.item?.id), name: x.name, q: QUAL[x.quality?.type] ?? 1 })) });
-        if (!fs.existsSync(path.join(OUT, 'chars-beispiel.json'))) writeJson(path.join(OUT, 'chars-beispiel.json'), { sum, eq });
+        writeJson(path.join(OUT, 'chars-beispiel.json'), { sum, eq });
       }
       log(`Charakter ${c.name} (${realmCfg}): ${e.ok ? `gefunden auf ${e.realmSlug} als „${e.charName}“ (${e.ns}), ${e.equip.length} Teile` : 'nicht gefunden'}`);
       out.chars.push(e);
