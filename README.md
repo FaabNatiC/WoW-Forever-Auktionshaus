@@ -34,7 +34,7 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 | `items.json` | Grunddaten: englische Namen, Kategorien, Icon-Namen |
 | `update.js` | holt Preise und Namen, schreibt den Verlauf |
 | `package.json` | markiert `update.js` als ES-Modul |
-| `.github/workflows/update.yml` | startet `update.js` alle 15 Minuten; veröffentlicht nur, wenn Blizzard einen neuen AH-Stand hat (manueller Start: immer) |
+| `.github/workflows/update.yml` | startet `update.js` 6-mal pro Stunde (GitHub lässt geplante Läufe oft aus); veröffentlicht nur, wenn Blizzard einen neuen AH-Stand hat (manueller Start: immer). Alle 40 Tage ein kleiner Commit (`.keepalive`), damit GitHub den Zeitplan nicht pausiert. Hängt der Job, holt die App aktuellere Preise direkt über forever-prices nach. |
 | Branch `data` | Daten (`latest.json`, `h/` stündlich, `d/` täglich, `w/` Wochenmuster, `names.json` deutsche Namen/Icons, `recipes.json` alle Rezepte), wird bei jedem Lauf ersetzt |
 
 Die Preisdaten liegen bewusst in einem eigenen Branch, der bei jedem Lauf überschrieben wird. So wächst das Repo nicht mit jeder Stunde.

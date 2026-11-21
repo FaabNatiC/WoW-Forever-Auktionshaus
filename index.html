@@ -290,8 +290,10 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.10';
+  var APP_VERSION = '0.10.2';
   var CHANGES = {
+    '0.10.2': ['Lässt GitHub den Preis-Job aus, holt die App aktuellere Preise automatisch über forever-prices nach',
+               'Preis-Job fragt Blizzard 6-mal pro Stunde und bleibt dauerhaft aktiv (kein Einschlafen nach 60 Tagen)'],
     '0.10': ['Neu im Item-Detail: „Bester Zeitpunkt“ zum Kaufen und Verkaufen nach Wochentag und Uhrzeit',
              'Heatmap Wochentag × Uhrzeit (grün = günstig, rot = teuer) mit Hinweis, wie belastbar das Muster ist',
              'Zeitfenster mit wenig Konkurrenz im AH',
@@ -333,7 +335,7 @@
   var LOGO = '<svg aria-hidden="true" width="34" height="34" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#16181D"/><ellipse cx="50" cy="77" rx="29" ry="10" fill="#A8772A"/><ellipse cx="50" cy="72.5" rx="29" ry="10" fill="#E8B44C"/><ellipse cx="50" cy="72.5" rx="19.5" ry="6" fill="none" stroke="#A8772A" stroke-width="1.6"/><path d="M20 58 L14 53.5 M24.5 51 L21 44.5 M80 58 L86 53.5" stroke="#E8B44C" stroke-width="2.4" stroke-linecap="round" fill="none"/><g transform="translate(44 49) rotate(40)"><rect x="-3.2" y="-52" width="6.4" height="44" rx="2.2" fill="#8A5A2B"/><rect x="-20" y="-9.5" width="40" height="18" rx="3.5" fill="#C98B47"/><rect x="-16" y="-9.5" width="4.2" height="18" fill="#E8B44C"/><rect x="11.8" y="-9.5" width="4.2" height="18" fill="#E8B44C"/></g></svg>';
   var REPO = 'FaabNatiC/WoW-Forever-Auktionshaus';
   var DATA = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? './out/' : 'https://raw.githubusercontent.com/' + REPO + '/data/';
-  var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, SHARDS = 32, HIST = {}, BZ = {}, SOURCE = '';
+  var CATS = [], ITEMS = {}, ICONS = [], SNAP = { A:{}, H:{}, N:{} }, SCANNED = {}, VIA = {}, SHARDS = 32, HIST = {}, BZ = {}, SOURCE = '';
   var RECIPES = [], RN = {}, VENDOR = {}, RSRC = '', RUPD = 0, RROWS = [];
   var PROFS = ['Alle'], ALLPROFS = [], PCNT = {};
   function profOn(p){ return (S.hiddenProfs || []).indexOf(p) < 0; }
@@ -471,7 +473,7 @@
     if (!navigator.onLine) return '<span class="fresh"><span class="dot" style="background:var(--loss)"></span>Offline · letzter Stand '+dt(t)+'</span>';
     var h = (Date.now() - t) / 36e5, col = h < 2 ? 'var(--up)' : h < 12 ? 'var(--gold)' : 'var(--loss)';
     var ago = h < 1 ? 'vor ' + Math.max(1, Math.round(h*60)) + ' Min.' : h < 48 ? 'vor ' + Math.round(h) + ' Std.' : 'vor ' + Math.round(h/24) + ' Tagen';
-    return '<span class="fresh"><span class="dot" style="background:'+col+'"></span>Stand '+dt(t)+' · '+ago+'</span>';
+    return '<span class="fresh"><span class="dot" style="background:'+col+'"></span>Stand '+dt(t)+' · '+ago+(VIA[S.faction] ? ' · über forever-prices' : '')+'</span>';
   }
   function dt(t){ var d = new Date(t), p = function(x){ return String(x).padStart(2,'0'); }; return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes()); }
   function dd(t){ var d = new Date(t), p = function(x){ return String(x).padStart(2,'0'); }; return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'; }
@@ -1073,6 +1075,7 @@
     route(); if (!lastTab) { render(); lastTab = S.tab; }
     showNews();
     checkVersion();
+    catchUp();
     fetch(DATA+'names.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : {}; }).then(function(N){ BZ = N || {}; if (Object.keys(BZ).length) render(); }).catch(function(){});
   }).catch(function(e){
     $('head').innerHTML = '<div class="brand">'+LOGO+'<h1>Forever AH</h1></div>';
@@ -1099,13 +1102,37 @@
     $('sheet').innerHTML = newsHtml(APP_VERSION);
   }
 
+  // ---------- Nachholen über forever-prices, wenn unser Job hängt ----------
+  var FP_URL = 'https://raw.githubusercontent.com/mkborik-cloud/forever-prices/data/prices.lua', FP_HOUSE = { '111':'A', '114':'H', '117':'N' }, fpLast = 0;
+  function catchUp(){
+    var oldest = Math.min(SCANNED.A || 0, SCANNED.H || 0, SCANNED.N || 0);
+    if (Date.now() - oldest < 75 * 60e3 || Date.now() - fpLast < 10 * 60e3 || !navigator.onLine) return;
+    fpLast = Date.now();
+    fetch(FP_URL, { cache:'no-cache' }).then(function(r){ return r.ok ? r.text() : null; }).then(function(txt){
+      if (!txt) return;
+      var got = {}, cur = null, lines = txt.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var l = lines[i], m;
+        if (l.charCodeAt(0) === 77 && (m = l.match(/^M\[(\d+)\] = \{.*?scanned = (\d+)/))) { cur = FP_HOUSE[m[1]] || null; if (cur) got[cur] = { t: +m[2] * 1000, items: {} }; continue; }
+        if (l.charCodeAt(0) === 100 && l.charCodeAt(1) === 111 && (m = l.match(/^do local d = M\[(\d+)\]/))) { cur = FP_HOUSE[m[1]] || null; if (cur && !got[cur]) got[cur] = { t: 0, items: {} }; continue; }
+        if (cur && l.charCodeAt(0) === 100 && (m = l.match(/^d\[(\d+)\]="([^"]+)"/))) got[cur].items[m[1]] = m[2].split(',').map(Number);
+      }
+      var changed = false;
+      ['A','H','N'].forEach(function(f){
+        var g = got[f]; if (!g || !g.t || g.t <= (SCANNED[f] || 0) + 60e3 || Object.keys(g.items).length < 300) return;
+        SNAP[f] = g.items; SCANNED[f] = g.t; VIA[f] = 1; changed = true;
+      });
+      if (changed) { HIST = {}; render(); toast('Neuere Preise über forever-prices geladen'); }
+    }).catch(function(){});
+  }
+
   window.addEventListener('online', function(){ renderHead(); }); window.addEventListener('offline', function(){ renderHead(); });
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState === 'visible') checkVersion();
     if (document.visibilityState !== 'visible' || !SCANNED.A) return;
     fetch(DATA+'latest.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(L){
-      if (!L || !L.scanned || L.scanned.A === SCANNED.A) return;
-      SCANNED = L.scanned; SOURCE = L.source || SOURCE; SNAP = { A:L.A, H:L.H, N:L.N }; HIST = {}; render(); toast('Neue Preise geladen');
+      if (!L || !L.scanned || !(L.scanned.A > SCANNED.A)) { catchUp(); return; }
+      SCANNED = L.scanned; SOURCE = L.source || SOURCE; SNAP = { A:L.A, H:L.H, N:L.N }; VIA = {}; HIST = {}; render(); toast('Neue Preise geladen'); catchUp();
     }).catch(function(){});
   });
 })();
