@@ -168,6 +168,16 @@
   .toast.show{opacity:1}
   .hidden{display:none !important}
   .row.dim{opacity:.55}
+  .tipbtn{border:0;background:none;padding:0;cursor:pointer;flex:none} .tiptxt{cursor:pointer}
+  .sheet-bg.tipbg{align-items:center;padding:16px}
+  .wowtip{width:min(360px,100%);max-height:80vh;overflow-y:auto;background:#0B0D1C;border:1.5px solid #A9A9B8;border-radius:6px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:14px;line-height:1.35;color:#fff}
+  .wowtip .tl{display:flex;justify-content:space-between;gap:12px;color:#fff}
+  .wowtip .tl:first-child{font-size:16px;font-weight:700;margin-bottom:2px}
+  .wowtip .g{color:#1EFF00} .wowtip .y{color:#FFD100} .wowtip .r{color:#FF2020} .wowtip .x{color:#9D9D9D} .wowtip .b{color:#66BBFF}
+  .wowtip .q0{color:#9D9D9D} .wowtip .q1{color:#FFFFFF} .wowtip .q2{color:#1EFF00} .wowtip .q3{color:#0070DD} .wowtip .q4{color:#A335EE} .wowtip .q5{color:#FF8000}
+  .wowtip .hint{color:#9D9D9D}
+  .tiplink{display:block;margin-top:10px;color:#FFD100;font-size:13px;text-decoration:none}
+  .row .ic{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
   .timing-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:var(--card2);color:var(--soft)}
   .timing-badge.high{background:var(--up-bg);color:var(--up)} .timing-badge.mid{background:var(--gold-bg);color:var(--gold-soft)}
   .timing-rec{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 4px}
@@ -290,8 +300,12 @@
     { out:'12359', prof:'Bergbau',     skill:250, mats:[['10620',1]] }
   ];
 
-  var APP_VERSION = '0.10.2';
+  var APP_VERSION = '0.11';
   var CHANGES = {
+    '0.11': ['Tooltips wie im Spiel: im Item-Detail auf Icon oder Namen tippen, in Listen lange auf das Icon drücken',
+             'Berufe ohne handelbare Rezepte (Angeln, Kräuterkunde, Kürschnerei) tauchen nicht mehr als Filter auf',
+             'Bei 0 Treffern zeigt die Liste, welcher Filter alles ausblendet – mit Knopf zum Lockern',
+             'Vorbereitung für „Meine Charaktere“ (Ausrüstungsvergleich)'],
     '0.10.2': ['Lässt GitHub den Preis-Job aus, holt die App aktuellere Preise automatisch über forever-prices nach',
                'Preis-Job fragt Blizzard 6-mal pro Stunde und bleibt dauerhaft aktiv (kein Einschlafen nach 60 Tagen)'],
     '0.10': ['Neu im Item-Detail: „Bester Zeitpunkt“ zum Kaufen und Verkaufen nach Wochentag und Uhrzeit',
@@ -347,9 +361,9 @@
       RSRC = 'eingebaut (10 Rezepte)';
       RECIPES = RECIPES_FALLBACK.map(function(r){ return { id:r.out, prof:r.prof, cat:'', out:r.out, qty:1, mats:r.mats, skill:r.skill }; });
     }
-    var cnt = {}; RECIPES.forEach(function(r){ cnt[r.prof] = (cnt[r.prof] || 0) + 1; });
+    var cnt = {}; RECIPES.forEach(function(r){ if (!isCamp(r)) cnt[r.prof] = (cnt[r.prof] || 0) + 1; }); RECIPES.forEach(function(r){ if (!(r.prof in cnt)) cnt[r.prof] = 0; });
     ALLPROFS = Object.keys(cnt).sort(function(a,b){ return cnt[b] - cnt[a]; }); PCNT = cnt;
-    PROFS = ['Alle'].concat(ALLPROFS.filter(profOn));
+    PROFS = ['Alle'].concat(ALLPROFS.filter(function(p){ return profOn(p) && PCNT[p] > 0; }));
     if (PROFS.indexOf(S.prof) < 0) S.prof = 'Alle';
     S.fav = S.fav.map(function(k){ if (k[0] !== 'r' || recipe(k.slice(2))) return k; var r = RECIPES.filter(function(x){ return x.out === k.slice(2); })[0]; return r ? 'r:'+r.id : k; });
   }
@@ -602,7 +616,7 @@
     if (S.tab === 'rezepte') {
       var d = recipeRows(); RROWS = d.rows; shown = PAGE;
       lh = '<span>'+n(d.rows.length)+(d.rows.length===1?' Rezept':' Rezepte')+'</span>'+sortBtn();
-      html = d.rows.length ? d.rows.slice(0, shown).map(recipeRow).join('') + (d.rows.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox('Keine Rezepte für diese Auswahl.');
+      html = d.rows.length ? d.rows.slice(0, shown).map(recipeRow).join('') + (d.rows.length > shown ? '<div id="more" class="meta" style="text-align:center;padding:12px">Weitere werden geladen …</div>' : '') : emptyBox(zeroHint());
       ctx = d.rows.map(function(x){ return 'r:'+x.r.id; });
     } else if (S.tab === 'markt') {
       var ids = marketIds();
@@ -633,6 +647,7 @@
       + [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(o){ return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(S.theme===o[0])+'">'+o[1]+'</button>'; }).join('') + '</div>'
       + '<h2 class="sec" id="berufe">Meine Berufe</h2><div class="box">' + ALLPROFS.map(function(p){
           var on = profOn(p), v = S.skills[p] || '';
+          if (!PCNT[p]) return '<div class="line"><span style="flex:1;color:var(--muted)">'+p+'</span><span class="meta">keine handelbaren Rezepte</span></div>';
           return '<div class="line"><button type="button" class="switch" data-toggleprof="'+esc(p)+'" role="switch" aria-checked="'+on+'"><i></i></button><span style="flex:1">'+p+' <span class="meta">'+n(PCNT[p]||0)+'</span></span>'
             + '<input class="skill" type="number" inputmode="numeric" min="0" max="300" placeholder="Skill" aria-label="Fertigkeit '+p+'" data-skill="'+esc(p)+'" value="'+v+'"'+(on?'':' disabled')+'></div>';
         }).join('') + '</div><p class="hint">Ausgeschaltete Berufe verschwinden aus Rezepten, Filter und „Verwendet in“. Die Fertigkeit nutzt der Filter „Meine Fertigkeit“. Fertigkeitswerte der Rezepte: ForeverDB.net.</p>'
@@ -644,7 +659,7 @@
       + '</div><p class="hint">Blizzard hat die Gebühren für Forever nicht veröffentlicht. Vorgabe: Classic-Werte (5 % / 15 %).</p>'
       + '<h2 class="sec">Datenstand</h2><div class="box">'
       + ['A','H','N'].map(function(f){ return '<div class="line"><span>AH-Scan '+FNAME[f]+'</span><span class="num">'+(SCANNED[f] ? dt(SCANNED[f]) : '–')+'</span></div>'; }).join('')
-      + '<div class="line"><span>Aktualisierung</span><span>stündlich (GitHub Actions)</span></div>'
+      + '<div class="line"><span>Aktualisierung</span><span>Blizzard ca. stündlich · geprüft 6× pro Std.</span></div>'
       + '<div class="line"><span>Preisquelle</span><span>'+esc(SOURCE || '–')+'</span></div>'
       + '<div class="line"><span>Deutsche Namen</span><span class="num">'+n(Object.keys(BZ).length)+' Items</span></div>'
       + '<div class="line"><span>Markt</span><span>Normal (PvE) · EU</span></div>'
@@ -673,6 +688,18 @@
     if (v === cur) { if (mk) S.msortAsc = !S.msortAsc; else S.sortAsc = !S.sortAsc; }
     else { if (mk) { S.msort = v; S.msortAsc = v === 'name'; } else { S.sort = v; S.sortAsc = v === 'name' || v === 'skill'; } }
     save(); render();
+  }
+  function zeroHint(){
+    var tries = [
+      ['skillMode', 'all', '„Meine Fertigkeit“'+(S.prof !== 'Alle' && S.skills[S.prof] ? ' ('+S.prof+' '+S.skills[S.prof]+')' : '')],
+      ['onlyProfit', false, '„profitabel“'], ['minAuc', false, '„ab 5 Auktionen“'], ['onlyAH', false, '„im AH“'],
+      ['rcat', '', 'Kategorie „'+S.rcat+'“'], ['group', 'Alle', 'Gruppe „'+S.group+'“'], ['prof', 'Alle', 'Beruf „'+S.prof+'“']];
+    for (var i = 0; i < tries.length; i++) {
+      var k = tries[i][0], old = S[k]; if (old === tries[i][1]) continue;
+      S[k] = tries[i][1]; var c = recipeRows().rows.length; S[k] = old;
+      if (c > 0) return 'Keine Rezepte. Ohne '+tries[i][2]+' wären es '+n(c)+'.<br><button type="button" class="btn" data-loosen="'+k+'" data-v="'+JSON.stringify(tries[i][1]).replace(/"/g,'&quot;')+'">Filter lockern</button>';
+    }
+    return Q.rezepte ? 'Keine Rezepte zu „'+esc(Q.rezepte)+'“.' : 'Keine Rezepte für diese Auswahl.';
   }
   function filterCount(){ return (S.prof !== 'Alle' ? 1 : 0) + (S.rcat ? 1 : 0) + (S.skillMode === 'mine' ? 1 : 0) + (S.onlyAH ? 1 : 0) + (S.onlyProfit ? 1 : 0) + (S.minAuc ? 1 : 0); }
   function filterSummary(){
@@ -760,7 +787,7 @@
   function recipeDetail(id){
     var rc = recipe(id); if (!rc) return '<p class="note">Rezept nicht gefunden.</p>';
     var c = calc(rc), o = row(rc.out), qty = Math.max(1, S.qty[id] || 1);
-    var h = '<div class="titlerow">'+iconHtml(rc.out,'lg')+'<div><h1 class="q'+qual(rc.out)+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+(rc.cat ? ' · '+esc(rc.cat) : '')+' · '+(rc.skill == null ? 'Fertigkeit unbekannt' : 'ab Fertigkeit '+rc.skill)+(rc.qty > 1 ? ' · ergibt '+rc.qty+' Stück' : '')+' · '+FNAME[S.faction]+'</p></div></div>';
+    var h = '<div class="titlerow"><button type="button" class="tipbtn" data-tip="'+rc.out+'" aria-label="Tooltip anzeigen">'+iconHtml(rc.out,'lg')+'</button><div><h1 class="q'+qual(rc.out)+' tiptxt" data-tip="'+rc.out+'">'+esc(name(rc.out))+'</h1><p class="sub">'+rc.prof+(rc.cat ? ' · '+esc(rc.cat) : '')+' · '+(rc.skill == null ? 'Fertigkeit unbekannt' : 'ab Fertigkeit '+rc.skill)+(rc.qty > 1 ? ' · ergibt '+rc.qty+' Stück' : '')+' · '+FNAME[S.faction]+'</p></div></div>';
     if (!skillOk(rc)) h += '<p class="note">Über deiner eingetragenen Fertigkeit ('+S.skills[rc.prof]+').</p>';
     if (rc.ssrc === 'classic') h += '<p class="hint">Fertigkeitswert aus Classic – in Forever kann er abweichen.</p>';
     if (c.profit == null) return h + '<p class="note">Das Ergebnis-Item wird im '+FNAME[S.faction]+'-AH gerade nicht angeboten – kein Verkaufspreis.</p>';
@@ -796,7 +823,7 @@
   function itemDetail(id){
     if (!ITEMS[id] && !NAMES[id] && !BZ[id] && !RN[id] && !row(id)) return '<p class="note">Item nicht gefunden.</p>';
     var r = row(id), d = dev(id), src = BZ[id] ? 'Name: Blizzard (Forever, deutsch)'+(enName(id)?' · engl. „'+esc(enName(id))+'“':'') : NAMES[id] ? 'Name: eigene Übersetzung'+(enName(id)?' („'+esc(enName(id))+'“)':'') : enName(id) ? 'Name: Classic-Datenbank (englisch)' : 'Name unbekannt – neues Forever-Item';
-    var h = '<div><div class="titlerow">'+iconHtml(id,'lg')+'<div><h1 class="q'+qual(id)+'">'+esc(name(id))+'</h1><p class="sub">'+CATS[catOf(id)]+' · Item-ID '+id+' · '+FNAME[S.faction]+'</p></div></div>'
+    var h = '<div><div class="titlerow"><button type="button" class="tipbtn" data-tip="'+id+'" aria-label="Tooltip anzeigen">'+iconHtml(id,'lg')+'</button><div><h1 class="q'+qual(id)+' tiptxt" data-tip="'+id+'">'+esc(name(id))+'</h1><p class="sub">'+CATS[catOf(id)]+' · Item-ID '+id+' · '+FNAME[S.faction]+'</p></div></div>'
       + '<p class="hint" style="margin-top:4px">'+src+' · <a href="https://foreverdb.net/item/'+id+'">auf ForeverDB ansehen</a></p></div>';
     if (!r) h += '<p class="note">Im '+FNAME[S.faction]+'-AH gerade nicht angeboten.</p>';
     else {
@@ -850,6 +877,29 @@
     });
   }
   function tickTxt(c){ var p = parts(c), o = []; if (p.g) o.push(p.g+'g'); if (p.s) o.push(p.s+'s'); if (p.k || !o.length) o.push(p.k+'k'); return o.join(' '); }
+  var TIPS = {};
+  function getTips(id){ var s = Number(id) % 64; if (!TIPS[s]) TIPS[s] = fetch(DATA+'tips/'+s+'.json', { cache:'no-cache' }).then(function(r){ return r.ok ? r.json() : {}; }).catch(function(){ delete TIPS[s]; return {}; }); return TIPS[s]; }
+  function showTip(id){
+    $('sheet').innerHTML = '<div class="sheet-bg tipbg" id="sheetBg"><div class="wowtip" role="dialog" aria-label="Tooltip"><span class="hint">Lade Tooltip …</span></div></div>';
+    getTips(id).then(function(T){ var box = document.querySelector('.wowtip'); if (box) box.innerHTML = tipHtml(T[id], id); });
+  }
+  function tipHtml(t, id){
+    var fdb = '<a class="tiplink" href="https://foreverdb.net/item/'+id+'" target="_blank" rel="noopener">Auf ForeverDB ansehen ›</a>';
+    if (!t) return '<div class="tl q'+qual(id)+'">'+esc(name(id))+'</div><div class="tl x">Für dieses Item gibt es noch keinen Tooltip. Er kommt mit einem der nächsten Preis-Läufe.</div>'+fdb;
+    return t.l.map(function(l){ return '<div class="tl '+l[2]+'"><span>'+esc(l[0])+'</span>'+(l[1] ? '<span>'+esc(l[1])+'</span>' : '')+'</div>'; }).join('')
+      + (t.s ? '<div class="tl w">Verkaufspreis: '+money(t.s)+'</div>' : '') + fdb;
+  }
+  var lpT = null, lpFired = false;
+  document.addEventListener('pointerdown', function(e){
+    var ic = e.target.closest && e.target.closest('.row .ic'); if (!ic) return;
+    var rw = ic.closest('.row'), k = rw && rw.dataset.open; if (!k) return;
+    var id = k[0] === 'r' ? (recipe(k.slice(2)) || {}).out : k.slice(2);
+    lpFired = false; clearTimeout(lpT);
+    lpT = setTimeout(function(){ lpFired = true; if (navigator.vibrate) navigator.vibrate(10); showTip(id); }, 450);
+  });
+  ['pointerup','pointercancel','pointerleave','scroll'].forEach(function(ev){ document.addEventListener(ev, function(){ clearTimeout(lpT); }, true); });
+  document.addEventListener('click', function(e){ if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener('contextmenu', function(e){ if (e.target.closest && e.target.closest('.row .ic')) e.preventDefault(); });
   var WDN = ['Mo','Di','Mi','Do','Fr','Sa','So'];
   function cellTxt(c){ var b = c % 6; return WDN[Math.floor(c / 6)]+' '+(b*4)+'–'+(b*4+4)+' Uhr'; }
   function nowCell(){ var d = new Date(new Date().toLocaleString('en-US', { timeZone:'Europe/Berlin' })); return ((d.getDay() + 6) % 7) * 6 + Math.floor(d.getHours() / 4); }
@@ -985,7 +1035,9 @@
     if (t.id === 'paneStar') { toggleFav(sel); render(); return; }
     if (t.id === 'updBtn') { location.replace(location.pathname + '?v=' + encodeURIComponent(t.dataset.v) + location.hash); return; }
     if (t.id === 'sheetOk') { closeSheet(); return; }
+    if (t.dataset.tip) { showTip(t.dataset.tip); return; }
     if (t.id === 'filterBtn') { openFilter(); return; }
+    if (t.dataset.loosen) { S[t.dataset.loosen] = JSON.parse(t.dataset.v); if (t.dataset.loosen === 'prof') S.rcat = ''; save(); render(); return; }
     if (t.id === 'sortBtn') { var mm = $('sortMenu'); if (mm) mm.remove(); else $('listhead').insertAdjacentHTML('beforeend', sortMenu()); return; }
     if (t.dataset.sortv) { setSort(t.dataset.sortv); return; }
     if (t.id === 'fReset' && S.tab === 'markt') { S.mMin5 = false; S.mQual = []; S.mDev = ''; S.mMine = false; save(); refreshFilter(); return; }
@@ -997,7 +1049,7 @@
     if (t.id === 'fProfs') { closeSheet(); location.hash = 'einstellungen'; setTimeout(function(){ var el = $('berufe'); if (el) el.scrollIntoView(); }, 50); return; }
     if (t.dataset.fprof) { S.prof = t.dataset.fprof; S.rcat = ''; save(); refreshFilter(); return; }
     if (t.dataset.group) { S.group = t.dataset.group; save(); render(); return; }
-    if (t.dataset.toggleprof) { var hp = S.hiddenProfs = (S.hiddenProfs || []).slice(), ix = hp.indexOf(t.dataset.toggleprof); if (ix >= 0) hp.splice(ix, 1); else hp.push(t.dataset.toggleprof); PROFS = ['Alle'].concat(ALLPROFS.filter(profOn)); if (!profOn(S.prof)) S.prof = 'Alle'; save(); render(); return; }
+    if (t.dataset.toggleprof) { var hp = S.hiddenProfs = (S.hiddenProfs || []).slice(), ix = hp.indexOf(t.dataset.toggleprof); if (ix >= 0) hp.splice(ix, 1); else hp.push(t.dataset.toggleprof); PROFS = ['Alle'].concat(ALLPROFS.filter(function(p){ return profOn(p) && PCNT[p] > 0; })); if (!profOn(S.prof)) S.prof = 'Alle'; save(); render(); return; }
     if (t.id === 'minAuc') { S.minAuc = !S.minAuc; save(); filterOpen ? refreshFilter() : render(); return; }
     if (t.id === 'newsBtn') { showNews(true); return; }
     if (t.id === 'checkBtn') { checkVersion(true); return; }
@@ -1026,7 +1078,7 @@
   });
   document.addEventListener('pointerdown', chartPoint);
   document.addEventListener('pointermove', function(e){ if (e.buttons || e.pointerType === 'mouse') chartPoint(e); });
-  document.addEventListener('click', function(e){ if (e.target.id === 'sheetBg') closeSheet(); var mm = $('sortMenu'); if (mm && !e.target.closest('#sortMenu,#sortBtn')) mm.remove(); });
+  document.addEventListener('click', function(e){ var tt = e.target.closest && e.target.closest('h1[data-tip]'); if (tt) { showTip(tt.dataset.tip); return; } if (e.target.id === 'sheetBg' || (e.target.closest && e.target.closest('.wowtip') && !e.target.closest('a'))) closeSheet(); var mm = $('sortMenu'); if (mm && !e.target.closest('#sortMenu,#sortBtn')) mm.remove(); });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.open) { openDetail(e.target.dataset.open); return; }
     if (e.key === 'Escape' && $('sheet').innerHTML) { closeSheet(); return; }

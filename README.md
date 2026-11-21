@@ -13,6 +13,7 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 - **Meine Berufe:** Berufe in den Einstellungen ein-/ausblenden, Fertigkeit je Beruf
 - **Rezept-Rechner:** Gewinn und Marge pro Craft, Sortierung, „nur profitable“, Filter nach eigener Fertigkeit
 - **Mengenrechner:** Gesamtkosten und Gewinn für X Crafts, Einkaufsliste zum Kopieren, Warnung bei zu wenig Material im AH
+- **Tooltips wie im Spiel:** im Item-Detail Icon oder Namen antippen, in Listen lange aufs Icon drücken (Daten: Blizzard-API, `tips/` im Daten-Branch)
 - **Bester Zeitpunkt:** Kaufen/Verkaufen nach Wochentag und Uhrzeit (4-Stunden-Blöcke, Serverzeit), Heatmap, Hinweis zur Belastbarkeit, Zeitfenster mit wenig Konkurrenz
 - **Preisverlauf:** mit Preisachse, Datumsmarken, Schnittlinie und Antippen für Werte; 7 Tage stündlich, 30 Tage täglich (baut sich ab dem ersten Lauf auf)
 - **Deutsche Forever-Namen und Icons** direkt aus der Blizzard-API (auch für neue Forever-Items)
@@ -28,6 +29,7 @@ Private Web-App (PWA) für WoW Forever: alle Auktionshaus-Preise mit Preisverlau
 |---|---|
 | `index.html` | die App |
 | `sw.js` | Offline-Start (erst Netz, sonst letzter gespeicherter Stand) |
+| `chars.json` | Charaktere (Realm, Name) für den späteren Ausrüstungsvergleich – Ausrüstung landet im Daten-Branch |
 | `version.json` | aktuelle App-Version – bei jedem Update erhöhen, sonst erscheint kein Hinweis |
 | `manifest.json`, `icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App-Name und Logo |
 | `classic.json` | Fertigkeitswerte und Händlerpreise aus Classic (wow-classic-items) als Ergänzung zu Blizzard |

@@ -267,8 +267,9 @@ if (token) {
   if (rec) {
     try {
       const lua = fs.readFileSync(path.join(OUT, 'fdb', 'Recipes.lua'), 'utf8');
-      const sk = {}, re = /\{(\d+),"(?:[^"\\]|\\.)*",(\d+),\d+,\d+,\d+,(\d+),/g; let m;
-      while ((m = re.exec(lua))) { const it = m[3], v = +m[2]; if (sk[it] == null || v < sk[it]) sk[it] = v; }
+      // Feld „Fertigkeit“ ist bei Rezepten aus Quests/Drops oft 0 – dann die gelbe Stufe (ab da gelingt es zuverlässig) nehmen
+      const sk = {}, re = /\{(\d+),"(?:[^"\\]|\\.)*",(\d+),(\d+),\d+,\d+,(\d+),/g; let m;
+      while ((m = re.exec(lua))) { const it = m[4]; let v = +m[2]; if (!v) v = +m[3]; if (sk[it] == null || v < sk[it]) sk[it] = v; }
       let hit = 0;
       for (const r of rec.list) { if (sk[r[3]] != null) { r[6] = sk[r[3]]; r[7] = 'fdb'; hit++; } else r[7] = r[6] != null ? 'classic' : null; }
       rec.skillSource = 'ForeverDB'; writeJson(file, rec);
@@ -305,4 +306,101 @@ if (token) {
   log(`Namen: ${ok} neu, ${nf} nicht gefunden, ${err} Fehler · gesamt ${Object.keys(names).length} von ${ids.size}`);
 } else {
   log('Keine Blizzard-Zugangsdaten: Namen/Icons übersprungen.');
+}
+
+// ---------- Tooltips wie im Spiel (schrittweise) ----------
+// tips/{id%64}.json: { id: { l: [[links, rechts, farbe]], s: verkaufspreis, st: {WERT: zahl}, dps, arm, inv } }
+// Farben: q0–q5 = Qualität, w = weiß, g = grün, y = gelb, r = rot, x = grau
+const TIP_SHARDS = 64, TIP_BUDGET = 2500;
+function colorOf(c, fb) {
+  if (!c) return fb;
+  const { r = 255, g = 255, b = 255 } = c;
+  if (g > 180 && r < 120 && b < 120) return 'g';
+  if (r > 200 && g < 100) return 'r';
+  if (r > 200 && g > 180 && b < 80) return 'y';
+  if (r < 170 && g < 170 && b < 170) return 'x';
+  return fb;
+}
+function tipOf(it) {
+  const p = it.preview_item || {}, L = [], ds = x => (x && (x.display_string || x.display?.display_string)) || '';
+  const q = 'q' + (QUAL[(p.quality || it.quality)?.type] ?? 1);
+  L.push([p.name || it.name, '', q]);
+  if (p.binding?.name) L.push([p.binding.name, '', 'w']);
+  if (p.unique_equipped) L.push([typeof p.unique_equipped === 'string' ? p.unique_equipped : 'Einzigartig', '', 'w']);
+  if (p.container_slots) L.push([ds(p.container_slots), '', 'w']);
+  const inv = p.inventory_type?.name || it.inventory_type?.name || '', sub = p.item_subclass?.name || '';
+  if (inv && it.inventory_type?.type !== 'NON_EQUIP') L.push([inv, sub, 'w']);
+  if (p.weapon) {
+    L.push([ds(p.weapon.damage), ds(p.weapon.attack_speed), 'w']);
+    if (p.weapon.dps) L.push([ds(p.weapon.dps), '', 'w']);
+  }
+  if (p.armor) L.push([ds(p.armor), '', 'w']);
+  if (p.shield_block) L.push([ds(p.shield_block), '', 'w']);
+  const st = {};
+  for (const s of p.stats || []) { L.push([ds(s), '', colorOf(s.display?.color, s.is_equip_bonus ? 'g' : 'w')]); if (s.type?.type) st[s.type.type] = s.value; }
+  for (const r of p.resistances || []) L.push([ds(r), '', 'w']);
+  if (p.durability) L.push([ds(p.durability), '', 'w']);
+  const rq = p.requirements || {};
+  for (const k of ['playable_classes', 'playable_races', 'level', 'skill', 'reputation', 'ability']) if (rq[k]) L.push([ds(rq[k]), '', colorOf(rq[k].color, 'w')]);
+  for (const sp of p.spells || []) if (sp.description) L.push([sp.description, '', colorOf(sp.display_color, 'g')]);
+  if (p.set) { L.push([ds(p.set), '', 'y']); for (const e of p.set.effects || []) L.push([ds(e), '', e.is_active ? 'g' : 'x']); }
+  if (p.description) L.push(['„' + p.description + '“', '', 'y']);
+  if (p.crafting_reagent) L.push([p.crafting_reagent, '', 'b']);
+  const tip = { l: L.filter(x => x[0]) };
+  const sell = p.sell_price?.value ?? it.sell_price; if (sell) tip.s = sell;
+  if (Object.keys(st).length) tip.st = st;
+  if (p.weapon?.dps?.value) tip.dps = p.weapon.dps.value;
+  if (p.armor?.value) tip.arm = p.armor.value;
+  if (it.inventory_type?.type) tip.inv = it.inventory_type.type;
+  return tip;
+}
+if (token) {
+  const shards = {}, load = s => shards[s] ||= readJson(path.join(OUT, 'tips', `${s}.json`), {});
+  const names = readJson(path.join(OUT, 'names.json'), {});
+  const vol = {}; for (const f of Object.keys(prices)) for (const [id, r] of Object.entries(prices[f].items)) vol[id] = (vol[id] || 0) + (r[4] || 0);
+  const prio = id => (RECIPE_IDS.has(id) ? 1e12 : 0) + (vol[id] || 0);
+  const all = new Set([...Object.keys(names), ...RECIPE_IDS]);
+  const todo = [...all].filter(id => !load(+id % TIP_SHARDS)[id]).sort((a, b) => prio(b) - prio(a)).slice(0, TIP_BUDGET);
+  let ok = 0, err = 0, sample = !fs.existsSync(path.join(OUT, 'tips', 'beispiel.json'));
+  const work = async (id) => {
+    try {
+      const it = await bz(`/data/wow/item/${id}`, 'static-forever-eu', '&locale=de_DE');
+      if (!it) return;
+      if (sample && (it.preview_item?.stats || it.preview_item?.weapon)) { sample = false; writeJson(path.join(OUT, 'tips', 'beispiel.json'), it); }
+      load(+id % TIP_SHARDS)[id] = tipOf(it); ok++;
+    } catch (e) { if (++err <= 3) log('Tooltip', id, e.message); }
+  };
+  for (let i = 0; i < todo.length; i += 20) await Promise.all(todo.slice(i, i + 20).map(work));
+  for (const [s, d] of Object.entries(shards)) writeJson(path.join(OUT, 'tips', `${s}.json`), d);
+  let total = 0; for (let s = 0; s < TIP_SHARDS; s++) total += Object.keys(load(s)).length;
+  log(`Tooltips: ${ok} neu, ${err} Fehler · gesamt ${total} von ${all.size}`);
+}
+
+// ---------- Charaktere (chars.json im Repo) ----------
+// out/chars.json: { updated, chars: [{ realm, name, ok, ns, summary: {...}, equip: [{ slot, id, name, q }] , fehler }] }
+{
+  const cfg = readJson(new URL('./chars.json', import.meta.url), { chars: [] });
+  const list = (cfg.chars || []).filter(c => c.realm && c.name);
+  if (token && list.length) {
+    const slug = s => s.toLowerCase().replace(/['’]/g, '').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss').trim().replace(/\s+/g, '-');
+    const out = { updated: Date.now(), chars: [] };
+    for (const c of list) {
+      const r = slug(c.realm), n = c.name.toLowerCase(), e = { realm: c.realm, name: c.name, ok: false };
+      for (const ns of ['profile-forever-eu', 'profile-classic-eu', 'profile-classic1x-eu']) {
+        try {
+          const sum = await bz(`/profile/wow/character/${encodeURIComponent(r)}/${encodeURIComponent(n)}`, ns, '&locale=de_DE');
+          if (!sum) continue;
+          const eq = await bz(`/profile/wow/character/${encodeURIComponent(r)}/${encodeURIComponent(n)}/equipment`, ns, '&locale=de_DE').catch(() => null);
+          e.ok = true; e.ns = ns;
+          e.summary = { level: sum.level, klasse: sum.character_class?.name, volk: sum.race?.name, fraktion: sum.faction?.name, gilde: sum.guild?.name, realm: sum.realm?.name };
+          e.equip = (eq?.equipped_items || []).map(x => ({ slot: x.slot?.type, platz: x.slot?.name, id: String(x.item?.id), name: x.name, q: QUAL[x.quality?.type] ?? 1 }));
+          if (!fs.existsSync(path.join(OUT, 'chars-beispiel.json'))) writeJson(path.join(OUT, 'chars-beispiel.json'), { sum, eq });
+          break;
+        } catch (err) { e.fehler = (e.fehler ? e.fehler + ' | ' : '') + ns + ': ' + err.message; }
+      }
+      log(`Charakter ${c.name}-${c.realm}: ${e.ok ? `ok (${e.ns}, ${e.equip.length} Teile)` : 'nicht gefunden – ' + (e.fehler || 'keine Daten')}`);
+      out.chars.push(e);
+    }
+    writeJson(path.join(OUT, 'chars.json'), out);
+  }
 }
